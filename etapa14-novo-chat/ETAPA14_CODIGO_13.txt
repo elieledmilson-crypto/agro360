@@ -1,0 +1,1136 @@
+AGRO360 — ETAPA 14 — CÓDIGO REAL
+BLOCO 13/13
+========================================================================
+
+========================================================================
+ARQUIVO: src/pages/reports/ReportsPage.tsx
+========================================================================
+
+import { useMemo, useState } from 'react'
+import HelpTip from '../../components/ui/HelpTip'
+import PageFeedback from '../../components/ui/PageFeedback'
+import Card from '../../components/ui/Card'
+import ReportMetricCard from '../../components/reports/ReportMetricCard'
+import SimpleBarChart from '../../components/reports/SimpleBarChart'
+import { useAuth } from '../../hooks/useAuth'
+import { formatCurrencyBRL, formatDate } from '../../utils/format'
+import {
+  getIntegratedReportData,
+  validateReportPeriod,
+  type AgendaReportData,
+  type AnimalReportData,
+  type CropReportData,
+  type FinanceReportData,
+  type HealthReportData,
+  type IntegratedReportData,
+  type InventoryReportData,
+  type LandReportData,
+  type MachineReportData,
+  type ReportBreakdownItem,
+  type ReportModuleKey,
+  type ReportPeriod,
+} from '../../services/reportService'
+
+// -------------------- Tipos locais --------------------
+
+type TabKey = 'overview' | ReportModuleKey
+
+type FeedbackType =
+  | { type: 'success' | 'error'; message: string }
+  | null
+
+const TAB_ORDER: TabKey[] = [
+  'overview',
+  'animals',
+  'health',
+  'land',
+  'crops',
+  'machines',
+  'inventory',
+  'finance',
+  'agenda',
+]
+
+const TAB_LABELS: Record<TabKey, string> = {
+  overview: 'Visão Geral',
+  animals: 'Animais',
+  health: 'Saúde Animal',
+  land: 'Terras',
+  crops: 'Cultivos',
+  machines: 'Máquinas',
+  inventory: 'Estoque',
+  finance: 'Financeiro',
+  agenda: 'Agenda',
+}
+
+// -------------------- Formatadores --------------------
+
+const numberFmt = new Intl.NumberFormat('pt-BR', {
+  maximumFractionDigits: 2,
+})
+
+function fmtNum(value: number): string {
+  return numberFmt.format(value)
+}
+
+function fmtKg(value: number): string {
+  return `${numberFmt.format(value)} kg`
+}
+
+function fmtHa(value: number): string {
+  return `${numberFmt.format(value)} ha`
+}
+
+function fmtKgHa(value: number): string {
+  return `${numberFmt.format(value)} kg/ha`
+}
+
+function fmtH(value: number): string {
+  return `${numberFmt.format(value)} h`
+}
+
+function safeDateLabel(value: string): string {
+  try {
+    return formatDate(value)
+  } catch {
+    return value
+  }
+}
+
+function formatPeriodLabel(period: ReportPeriod): string {
+  if (!period.startDate && !period.endDate) {
+    return 'Todo o histórico'
+  }
+
+  if (period.startDate && period.endDate) {
+    return `${safeDateLabel(period.startDate)} a ${safeDateLabel(
+      period.endDate,
+    )}`
+  }
+
+  if (period.startDate) {
+    return `Desde ${safeDateLabel(period.startDate)}`
+  }
+
+  return `Até ${safeDateLabel(period.endDate as string)}`
+}
+
+// -------------------- Subcomponentes auxiliares --------------------
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <Card className="p-6 text-sm text-gray-600 dark:text-gray-400">
+      {message}
+    </Card>
+  )
+}
+
+function SectionTitle({ children }: { children: string }) {
+  return (
+    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+      {children}
+    </h3>
+  )
+}
+
+function BreakdownChart({
+  title,
+  data,
+  formatter,
+  emptyMessage,
+}: {
+  title: string
+  data: ReportBreakdownItem[]
+  formatter: (value: number) => string
+  emptyMessage?: string
+}) {
+  return (
+    <SimpleBarChart
+      title={title}
+      data={data}
+      valueFormatter={formatter}
+      emptyMessage={emptyMessage ?? 'Sem dados.'}
+    />
+  )
+}
+
+// -------------------- Aba: Visão Geral --------------------
+
+function OverviewTab({
+  reportData,
+}: {
+  reportData: IntegratedReportData
+}) {
+  const cards: { label: string; value: string }[] = []
+
+  if (reportData.animals) {
+    cards.push({
+      label: 'Animais ativos',
+      value: fmtNum(reportData.animals.active),
+    })
+  }
+
+  if (reportData.health) {
+    cards.push({
+      label: 'Vacinações pendentes',
+      value: fmtNum(
+        reportData.health.pendingVaccinationsCurrent,
+      ),
+    })
+  }
+
+  if (reportData.land) {
+    cards.push({
+      label: 'Área cadastrada',
+      value: fmtHa(reportData.land.totalHectares),
+    })
+  }
+
+  if (reportData.crops) {
+    cards.push({
+      label: 'Produção no período',
+      value: fmtKg(reportData.crops.totalProductionKg),
+    })
+  }
+
+  if (reportData.machines) {
+    cards.push({
+      label: 'Horas trabalhadas no período',
+      value: fmtH(reportData.machines.workedHoursInPeriod),
+    })
+  }
+
+  if (reportData.inventory) {
+    cards.push({
+      label: 'Itens com estoque baixo',
+      value: fmtNum(reportData.inventory.belowMinimumCurrent),
+    })
+  }
+
+  if (reportData.finance) {
+    cards.push({
+      label: 'Saldo no período',
+      value: formatCurrencyBRL(reportData.finance.balance),
+    })
+  }
+
+  if (reportData.agenda) {
+    cards.push({
+      label: 'Atividades atrasadas no período',
+      value: fmtNum(reportData.agenda.overdueInPeriod),
+    })
+  }
+
+  if (cards.length === 0) {
+    return (
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold">
+          Nenhum módulo disponível para relatórios
+        </h2>
+        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          Seu perfil possui acesso ao módulo de Relatórios, mas não
+          possui permissão para visualizar dados dos módulos
+          operacionais.
+        </p>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {cards.map(card => (
+        <ReportMetricCard
+          key={card.label}
+          label={card.label}
+          value={card.value}
+        />
+      ))}
+    </div>
+  )
+}
+
+// -------------------- Aba: Animais --------------------
+
+function AnimalsTab({ data }: { data: AnimalReportData }) {
+  if (data.total === 0) {
+    return <EmptyState message="Nenhum animal cadastrado." />
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <ReportMetricCard
+          label="Total de animais"
+          value={fmtNum(data.total)}
+        />
+        <ReportMetricCard
+          label="Animais ativos"
+          value={fmtNum(data.active)}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BreakdownChart
+          title="Por situação"
+          data={data.byStatus}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Por espécie"
+          data={data.bySpecies}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Por categoria"
+          data={data.byCategory}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Por sexo"
+          data={data.bySex}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Aba: Saúde --------------------
+
+function HealthTab({ data }: { data: HealthReportData }) {
+  const hasCurrentData =
+    data.vaccinationStatusCurrent.length > 0 ||
+    data.pendingVaccinationsCurrent > 0 ||
+    data.ongoingTreatmentsCurrent > 0 ||
+    data.openOccurrencesCurrent > 0
+
+  const hasPeriodData =
+    data.vaccinationsInPeriod > 0 ||
+    data.treatmentsInPeriod > 0 ||
+    data.occurrencesInPeriod > 0
+
+  if (!hasCurrentData && !hasPeriodData) {
+    return (
+      <EmptyState message="Nenhum registro de saúde encontrado para o período." />
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <SectionTitle>Situação atual</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ReportMetricCard
+            label="Vacinações pendentes"
+            value={fmtNum(data.pendingVaccinationsCurrent)}
+          />
+          <ReportMetricCard
+            label="Tratamentos em andamento"
+            value={fmtNum(data.ongoingTreatmentsCurrent)}
+          />
+          <ReportMetricCard
+            label="Ocorrências abertas"
+            value={fmtNum(data.openOccurrencesCurrent)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>No período</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ReportMetricCard
+            label="Vacinações aplicadas"
+            value={fmtNum(data.vaccinationsInPeriod)}
+          />
+          <ReportMetricCard
+            label="Tratamentos iniciados"
+            value={fmtNum(data.treatmentsInPeriod)}
+          />
+          <ReportMetricCard
+            label="Ocorrências registradas"
+            value={fmtNum(data.occurrencesInPeriod)}
+          />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BreakdownChart
+          title="Vacinações por status (atual)"
+          data={data.vaccinationStatusCurrent}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Ocorrências abertas por severidade"
+          data={data.openOccurrencesBySeverity}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Aba: Terras --------------------
+
+function LandTab({ data }: { data: LandReportData }) {
+  if (data.totalAreas === 0) {
+    return <EmptyState message="Nenhuma área cadastrada." />
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <SectionTitle>Situação atual</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <ReportMetricCard
+            label="Total de áreas"
+            value={fmtNum(data.totalAreas)}
+          />
+          <ReportMetricCard
+            label="Hectares cadastrados"
+            value={fmtHa(data.totalHectares)}
+          />
+          <ReportMetricCard
+            label="Piquetes"
+            value={fmtNum(data.paddockCount)}
+          />
+          <ReportMetricCard
+            label="Piquetes ocupados"
+            value={fmtNum(data.occupiedPaddocks)}
+          />
+          <ReportMetricCard
+            label="Piquetes disponíveis"
+            value={fmtNum(data.availablePaddocks)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>Histórico de uso no período</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <ReportMetricCard
+            label="Registros de uso no período"
+            value={fmtNum(data.landUseRecordsInPeriod)}
+          />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BreakdownChart
+          title="Áreas por tipo"
+          data={data.byType}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Áreas por situação"
+          data={data.byStatus}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Registros de uso por tipo (período)"
+          data={data.landUseByTypeInPeriod}
+          formatter={fmtNum}
+          emptyMessage="Sem dados no período."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Aba: Cultivos --------------------
+
+function CropsTab({ data }: { data: CropReportData }) {
+  const hasAny =
+    data.totalCycles > 0 ||
+    data.harvestsInPeriod > 0 ||
+    data.managementsInPeriod > 0
+
+  if (!hasAny) {
+    return (
+      <EmptyState message="Nenhum dado de cultivo encontrado para o período." />
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <SectionTitle>Situação atual</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <ReportMetricCard
+            label="Total de ciclos"
+            value={fmtNum(data.totalCycles)}
+          />
+          <ReportMetricCard
+            label="Planejados"
+            value={fmtNum(data.plannedCycles)}
+          />
+          <ReportMetricCard
+            label="Em andamento"
+            value={fmtNum(data.activeCycles)}
+          />
+          <ReportMetricCard
+            label="Concluídos"
+            value={fmtNum(data.completedCycles)}
+          />
+          <ReportMetricCard
+            label="Cancelados"
+            value={fmtNum(data.cancelledCycles)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>Produção no período</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ReportMetricCard
+            label="Produção total"
+            value={fmtKg(data.totalProductionKg)}
+          />
+          <ReportMetricCard
+            label="Área colhida"
+            value={fmtHa(data.totalHarvestedAreaHectares)}
+          />
+          <ReportMetricCard
+            label="Produtividade"
+            value={fmtKgHa(data.productivityKgPerHectare)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>Operações no período</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ReportMetricCard
+            label="Colheitas"
+            value={fmtNum(data.harvestsInPeriod)}
+          />
+          <ReportMetricCard
+            label="Manejos"
+            value={fmtNum(data.managementsInPeriod)}
+          />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BreakdownChart
+          title="Ciclos por status"
+          data={data.cyclesByStatus}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Produção por cultura (kg)"
+          data={data.productionByCropKg}
+          formatter={fmtKg}
+          emptyMessage="Sem dados no período."
+        />
+        <BreakdownChart
+          title="Manejos por tipo (período)"
+          data={data.managementsByTypeInPeriod}
+          formatter={fmtNum}
+          emptyMessage="Sem dados no período."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Aba: Máquinas --------------------
+
+function MachinesTab({ data }: { data: MachineReportData }) {
+  const hasAny =
+    data.totalMachines > 0 ||
+    data.usageRecordsInPeriod > 0 ||
+    data.maintenanceRecordsInPeriod > 0
+
+  if (!hasAny) {
+    return (
+      <EmptyState message="Nenhum dado de máquinas encontrado para o período." />
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <SectionTitle>Situação atual</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <ReportMetricCard
+            label="Total de máquinas"
+            value={fmtNum(data.totalMachines)}
+          />
+          <ReportMetricCard
+            label="Operacionais"
+            value={fmtNum(data.operationalMachines)}
+          />
+          <ReportMetricCard
+            label="Em manutenção"
+            value={fmtNum(data.maintenanceMachines)}
+          />
+          <ReportMetricCard
+            label="Inativas"
+            value={fmtNum(data.inactiveMachines)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>Operação no período</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ReportMetricCard
+            label="Utilizações registradas"
+            value={fmtNum(data.usageRecordsInPeriod)}
+          />
+          <ReportMetricCard
+            label="Horas trabalhadas"
+            value={fmtH(data.workedHoursInPeriod)}
+          />
+          <ReportMetricCard
+            label="Manutenções"
+            value={fmtNum(data.maintenanceRecordsInPeriod)}
+          />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BreakdownChart
+          title="Máquinas por categoria"
+          data={data.byCategory}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Horas por tipo de operação (período)"
+          data={data.operationHoursByTypeInPeriod}
+          formatter={fmtH}
+          emptyMessage="Sem dados no período."
+        />
+        <BreakdownChart
+          title="Manutenções por tipo (período)"
+          data={data.maintenanceByTypeInPeriod}
+          formatter={fmtNum}
+          emptyMessage="Sem dados no período."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Aba: Estoque --------------------
+
+function InventoryTab({ data }: { data: InventoryReportData }) {
+  if (data.totalItems === 0 && data.movementsInPeriod === 0) {
+    return (
+      <EmptyState message="Nenhum item de estoque cadastrado." />
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <SectionTitle>Situação atual</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <ReportMetricCard
+            label="Total de itens"
+            value={fmtNum(data.totalItems)}
+          />
+          <ReportMetricCard
+            label="Itens ativos"
+            value={fmtNum(data.activeItems)}
+          />
+          <ReportMetricCard
+            label="Abaixo do mínimo"
+            value={fmtNum(data.belowMinimumCurrent)}
+          />
+          <ReportMetricCard
+            label="Vencidos"
+            value={fmtNum(data.expiredCurrent)}
+          />
+          <ReportMetricCard
+            label="Vencem em breve"
+            value={fmtNum(data.expiringSoonCurrent)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>Movimentações no período</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <ReportMetricCard
+            label="Movimentações"
+            value={fmtNum(data.movementsInPeriod)}
+          />
+          <ReportMetricCard
+            label="Entradas"
+            value={fmtNum(data.entriesInPeriod)}
+          />
+          <ReportMetricCard
+            label="Saídas"
+            value={fmtNum(data.exitsInPeriod)}
+          />
+        </div>
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          As quantidades de estoque não são somadas entre itens, pois
+          diferentes itens utilizam unidades distintas (kg, L, un,
+          sc…).
+        </p>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BreakdownChart
+          title="Itens por categoria"
+          data={data.itemsByCategory}
+          formatter={fmtNum}
+          emptyMessage="Sem dados atuais."
+        />
+        <BreakdownChart
+          title="Movimentações por tipo (período)"
+          data={data.movementsByTypeInPeriod}
+          formatter={fmtNum}
+          emptyMessage="Sem dados no período."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Aba: Financeiro --------------------
+
+function FinanceTab({ data }: { data: FinanceReportData }) {
+  if (data.transactionsCount === 0) {
+    return (
+      <EmptyState message="Nenhuma movimentação financeira encontrada para o período." />
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <ReportMetricCard
+          label="Receitas"
+          value={formatCurrencyBRL(data.revenues)}
+        />
+        <ReportMetricCard
+          label="Despesas"
+          value={formatCurrencyBRL(data.expenses)}
+        />
+        <ReportMetricCard
+          label="Saldo"
+          value={formatCurrencyBRL(data.balance)}
+        />
+        <ReportMetricCard
+          label="Transações"
+          value={fmtNum(data.transactionsCount)}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SimpleBarChart
+          title="Receitas por categoria"
+          data={data.revenueByCategory}
+          valueFormatter={formatCurrencyBRL}
+          emptyMessage="Sem receitas no período."
+        />
+        <SimpleBarChart
+          title="Despesas por categoria"
+          data={data.expenseByCategory}
+          valueFormatter={formatCurrencyBRL}
+          emptyMessage="Sem despesas no período."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Aba: Agenda --------------------
+
+function AgendaTab({ data }: { data: AgendaReportData }) {
+  if (data.entriesInPeriod === 0 && data.currentAlerts === 0) {
+    return (
+      <EmptyState message="Nenhuma atividade encontrada para o período." />
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <SectionTitle>Atividades no período</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <ReportMetricCard
+            label="Total no período"
+            value={fmtNum(data.entriesInPeriod)}
+          />
+          <ReportMetricCard
+            label="Pendentes"
+            value={fmtNum(data.pendingInPeriod)}
+          />
+          <ReportMetricCard
+            label="Atrasadas"
+            value={fmtNum(data.overdueInPeriod)}
+          />
+          <ReportMetricCard
+            label="Concluídas"
+            value={fmtNum(data.completedInPeriod)}
+          />
+          <ReportMetricCard
+            label="Canceladas"
+            value={fmtNum(data.cancelledInPeriod)}
+          />
+        </div>
+      </section>
+
+      <section>
+        <SectionTitle>Alertas atuais</SectionTitle>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <ReportMetricCard
+            label="Total"
+            value={fmtNum(data.currentAlerts)}
+          />
+          <ReportMetricCard
+            label="Urgentes"
+            value={fmtNum(data.urgentAlertsCurrent)}
+          />
+          <ReportMetricCard
+            label="Atenção"
+            value={fmtNum(data.attentionAlertsCurrent)}
+          />
+          <ReportMetricCard
+            label="Informativos"
+            value={fmtNum(data.informationalAlertsCurrent)}
+          />
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <BreakdownChart
+          title="Atividades por tipo (período)"
+          data={data.entriesByTypeInPeriod}
+          formatter={fmtNum}
+          emptyMessage="Sem dados no período."
+        />
+        <BreakdownChart
+          title="Atividades por origem (período)"
+          data={data.entriesBySourceInPeriod}
+          formatter={fmtNum}
+          emptyMessage="Sem dados no período."
+        />
+      </div>
+    </div>
+  )
+}
+
+// -------------------- Página principal --------------------
+
+export default function ReportsPage() {
+  const { user } = useAuth()
+
+  const [draftPeriod, setDraftPeriod] = useState<ReportPeriod>({})
+  const [appliedPeriod, setAppliedPeriod] = useState<ReportPeriod>(
+    {},
+  )
+  const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [feedback, setFeedback] = useState<FeedbackType>(null)
+
+  const reportData = useMemo<IntegratedReportData>(
+    () => getIntegratedReportData(user, appliedPeriod),
+    [user, appliedPeriod],
+  )
+
+  const availableTabs = useMemo<TabKey[]>(() => {
+    const moduleSet = new Set<string>(reportData.visibleModules)
+    return TAB_ORDER.filter(
+      tab => tab === 'overview' || moduleSet.has(tab),
+    )
+  }, [reportData.visibleModules])
+
+  const effectiveTab: TabKey = availableTabs.includes(activeTab)
+    ? activeTab
+    : 'overview'
+
+  function handleApply() {
+    try {
+      validateReportPeriod(draftPeriod)
+    } catch (error) {
+      setFeedback({
+        type: 'error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Período inválido.',
+      })
+      return
+    }
+
+    setFeedback(null)
+    setAppliedPeriod({ ...draftPeriod })
+  }
+
+  function handleClear() {
+    setDraftPeriod({})
+    setAppliedPeriod({})
+    setFeedback(null)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-2xl font-bold">Relatórios</h1>
+
+        <HelpTip
+          title="Para que servem os Relatórios?"
+          description="Os Relatórios consolidam informações já registradas nos módulos do Agro360 para facilitar o acompanhamento da propriedade."
+        />
+      </div>
+
+      {feedback && (
+        <PageFeedback
+          type={feedback.type}
+          message={feedback.message}
+        />
+      )}
+
+      <Card className="p-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <label className="flex flex-col text-sm">
+            <span className="text-gray-700 dark:text-gray-300 mb-1">
+              Data inicial
+            </span>
+            <input
+              type="date"
+              value={draftPeriod.startDate ?? ''}
+              onChange={event =>
+                setDraftPeriod(prev => ({
+                  ...prev,
+                  startDate: event.target.value || undefined,
+                }))
+              }
+              className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-900 dark:text-gray-100"
+            />
+          </label>
+
+          <label className="flex flex-col text-sm">
+            <span className="text-gray-700 dark:text-gray-300 mb-1">
+              Data final
+            </span>
+            <input
+              type="date"
+              value={draftPeriod.endDate ?? ''}
+              onChange={event =>
+                setDraftPeriod(prev => ({
+                  ...prev,
+                  endDate: event.target.value || undefined,
+                }))
+              }
+              className="rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-gray-900 dark:text-gray-100"
+            />
+          </label>
+
+          <div className="flex items-end gap-2 sm:col-span-2">
+            <button
+              type="button"
+              onClick={handleApply}
+              className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+            >
+              Aplicar período
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClear}
+              className="px-4 py-2 rounded border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              Limpar período
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+          Período:{' '}
+          <span className="font-medium">
+            {formatPeriodLabel(appliedPeriod)}
+          </span>
+        </p>
+      </Card>
+
+      <div className="flex flex-wrap gap-2">
+        {availableTabs.map(tab => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`px-3 py-1.5 rounded-full text-sm border transition ${
+              effectiveTab === tab
+                ? 'bg-green-600 text-white border-green-600'
+                : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+          >
+            {TAB_LABELS[tab]}
+          </button>
+        ))}
+      </div>
+
+      {effectiveTab === 'overview' && (
+        <OverviewTab reportData={reportData} />
+      )}
+
+      {effectiveTab === 'animals' && reportData.animals && (
+        <AnimalsTab data={reportData.animals} />
+      )}
+
+      {effectiveTab === 'health' && reportData.health && (
+        <HealthTab data={reportData.health} />
+      )}
+
+      {effectiveTab === 'land' && reportData.land && (
+        <LandTab data={reportData.land} />
+      )}
+
+      {effectiveTab === 'crops' && reportData.crops && (
+        <CropsTab data={reportData.crops} />
+      )}
+
+      {effectiveTab === 'machines' && reportData.machines && (
+        <MachinesTab data={reportData.machines} />
+      )}
+
+      {effectiveTab === 'inventory' && reportData.inventory && (
+        <InventoryTab data={reportData.inventory} />
+      )}
+
+      {effectiveTab === 'finance' && reportData.finance && (
+        <FinanceTab data={reportData.finance} />
+      )}
+
+      {effectiveTab === 'agenda' && reportData.agenda && (
+        <AgendaTab data={reportData.agenda} />
+      )}
+    </div>
+  )
+}
+
+========================================================================
+ARQUIVO: src/components/reports/ReportMetricCard.tsx
+========================================================================
+
+import Card from '../ui/Card'
+
+interface Props {
+  label: string
+  value: string | number
+  helper?: string
+}
+
+export default function ReportMetricCard({
+  label,
+  value,
+  helper,
+}: Props) {
+  return (
+    <Card className="p-4">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {label}
+      </p>
+
+      <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">
+        {value}
+      </p>
+
+      {helper && (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          {helper}
+        </p>
+      )}
+    </Card>
+  )
+}
+
+========================================================================
+ARQUIVO: src/components/reports/SimpleBarChart.tsx
+========================================================================
+
+import Card from '../ui/Card'
+
+interface BarItem {
+  label: string
+  value: number
+}
+
+interface Props {
+  title: string
+  data: BarItem[]
+  valueFormatter?: (value: number) => string
+  emptyMessage?: string
+}
+
+export default function SimpleBarChart({
+  title,
+  data,
+  valueFormatter,
+  emptyMessage,
+}: Props) {
+  const format = valueFormatter ?? ((v: number) => String(v))
+
+  const maxValue = data.reduce((max, item) => {
+    if (Number.isFinite(item.value) && item.value > max) {
+      return item.value
+    }
+
+    return max
+  }, 0)
+
+  return (
+    <Card className="p-4">
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+        {title}
+      </h3>
+
+      {data.length === 0 ? (
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {emptyMessage ?? 'Sem dados.'}
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {data.map(item => {
+            const value = Number.isFinite(item.value)
+              ? item.value
+              : 0
+
+            const pct =
+              maxValue > 0
+                ? (value / maxValue) * 100
+                : 0
+
+            return (
+              <li key={item.label}>
+                <div className="flex items-center justify-between text-xs mb-1 gap-2">
+                  <span className="text-gray-700 dark:text-gray-300 truncate">
+                    {item.label}
+                  </span>
+
+                  <span className="text-gray-900 dark:text-gray-100 font-medium whitespace-nowrap">
+                    {format(value)}
+                  </span>
+                </div>
+
+                <div className="h-2 rounded bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                  <div
+                    className="h-full rounded bg-green-500 dark:bg-green-600 transition-all"
+                    style={{
+                      width: `${pct}%`,
+                    }}
+                  />
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
+  )
+}

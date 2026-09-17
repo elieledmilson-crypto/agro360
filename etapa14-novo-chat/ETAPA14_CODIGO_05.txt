@@ -1,0 +1,2617 @@
+AGRO360 — ETAPA 14 — CÓDIGO REAL
+BLOCO 5/13
+========================================================================
+
+========================================================================
+ARQUIVO: src/services/propertyMapService.ts
+========================================================================
+
+import {
+  GeographicPoint,
+  LandArea,
+  LandAreaGeographicBoundary,
+  LandAreaMapLayout,
+  MapRelativePoint,
+  PropertyGeographicBoundary,
+  PropertyMapLocation,
+  SchematicShapeType,
+} from '../types'
+
+const LOCATION_KEY = 'agro360:propertyMap:location'
+const LAYOUT_KEY = 'agro360:propertyMap:layouts'
+const GEO_PROPERTY_KEY = 'agro360:propertyMap:geoBoundary:property'
+const GEO_LANDAREAS_KEY = 'agro360:propertyMap:geoBoundary:landareas'
+
+export const MAP_CANVAS_WIDTH = 1000
+export const MAP_CANVAS_HEIGHT = 700
+
+const CANVAS_PADDING = 40
+const MIN_LAYOUT_SIZE = 30
+const DEFAULT_NEW_LAYOUT_WIDTH = 120
+const DEFAULT_NEW_LAYOUT_HEIGHT = 100
+
+const EARTH_RADIUS_M = 6371008.8
+
+// -------------------- Localização da propriedade --------------------
+
+export function getPropertyMapLocation(): PropertyMapLocation | null {
+  try {
+    const raw = localStorage.getItem(LOCATION_KEY)
+
+    if (!raw) {
+      return null
+    }
+
+    const parsed: unknown = JSON.parse(raw)
+
+    if (!isValidLocation(parsed)) {
+      return null
+    }
+
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export function savePropertyMapLocation(
+  location: PropertyMapLocation,
+): void {
+  if (!isValidLocation(location)) {
+    throw new Error('Localização inválida.')
+  }
+
+  localStorage.setItem(
+    LOCATION_KEY,
+    JSON.stringify(location),
+  )
+}
+
+export function clearPropertyMapLocation(): void {
+  localStorage.removeItem(LOCATION_KEY)
+}
+
+export function isValidLatitude(
+  value: unknown,
+): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -90 &&
+    value <= 90
+  )
+}
+
+export function isValidLongitude(
+  value: unknown,
+): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -180 &&
+    value <= 180
+  )
+}
+
+function isValidLocation(
+  value: unknown,
+): value is PropertyMapLocation {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const v = value as Record<string, unknown>
+
+  return (
+    isValidLatitude(v.latitude) &&
+    isValidLongitude(v.longitude) &&
+    typeof v.updatedAt === 'string'
+  )
+}
+
+// -------------------- Layout esquemático --------------------
+
+const SCHEMATIC_SHAPE_TYPES: SchematicShapeType[] = [
+  'rectangle',
+  'triangle',
+  'trapezoid',
+  'l-shape',
+  'free',
+]
+
+export function isSchematicShapeType(
+  value: unknown,
+): value is SchematicShapeType {
+  return (
+    typeof value === 'string' &&
+    (SCHEMATIC_SHAPE_TYPES as string[]).includes(value)
+  )
+}
+
+export function isMapRelativePoint(
+  value: unknown,
+): value is MapRelativePoint {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const v = value as Record<string, unknown>
+
+  return (
+    typeof v.x === 'number' &&
+    Number.isFinite(v.x) &&
+    typeof v.y === 'number' &&
+    Number.isFinite(v.y)
+  )
+}
+
+export const SHAPE_PRESETS: Record<
+  Exclude<SchematicShapeType, 'free'>,
+  MapRelativePoint[]
+> = {
+  rectangle: [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ],
+
+  triangle: [
+    { x: 0.5, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ],
+
+  trapezoid: [
+    { x: 0.25, y: 0 },
+    { x: 0.75, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ],
+
+  'l-shape': [
+    { x: 0, y: 0 },
+    { x: 0.55, y: 0 },
+    { x: 0.55, y: 0.45 },
+    { x: 1, y: 0.45 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ],
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0
+  }
+
+  if (value < 0) {
+    return 0
+  }
+
+  if (value > 1) {
+    return 1
+  }
+
+  return value
+}
+
+function extractValidRelativePoints(
+  value: unknown,
+): MapRelativePoint[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  const result: MapRelativePoint[] = []
+
+  for (const item of value) {
+    if (isMapRelativePoint(item)) {
+      result.push({
+        x: clamp01(item.x),
+        y: clamp01(item.y),
+      })
+    }
+  }
+
+  return result
+}
+
+export function getLayoutShapePoints(
+  layout: LandAreaMapLayout,
+): MapRelativePoint[] {
+  const rawShapeType = (
+    layout as {
+      shapeType?: unknown
+    }
+  ).shapeType
+
+  const shapeType: SchematicShapeType =
+    isSchematicShapeType(rawShapeType)
+      ? rawShapeType
+      : 'rectangle'
+
+  if (shapeType === 'free') {
+    const rawPoints = (
+      layout as {
+        points?: unknown
+      }
+    ).points
+
+    const validPoints =
+      extractValidRelativePoints(rawPoints)
+
+    if (validPoints.length >= 3) {
+      return validPoints
+    }
+
+    return SHAPE_PRESETS.rectangle
+  }
+
+  return (
+    SHAPE_PRESETS[shapeType] ??
+    SHAPE_PRESETS.rectangle
+  )
+}
+
+export function applyShapeType(
+  layout: LandAreaMapLayout,
+  shapeType: SchematicShapeType,
+): LandAreaMapLayout {
+  if (shapeType === 'free') {
+    const rawShapeType = (
+      layout as {
+        shapeType?: unknown
+      }
+    ).shapeType
+
+    const currentShape =
+      isSchematicShapeType(rawShapeType)
+        ? rawShapeType
+        : 'rectangle'
+
+    const source =
+      currentShape === 'free'
+        ? extractValidRelativePoints(
+            (
+              layout as {
+                points?: unknown
+              }
+            ).points,
+          )
+        : getLayoutShapePoints(layout)
+
+    const safePoints =
+      source.length >= 3
+        ? source
+        : SHAPE_PRESETS.rectangle
+
+    return {
+      ...layout,
+      shapeType: 'free',
+      points: safePoints.map(point => ({
+        ...point,
+      })),
+    }
+  }
+
+  return {
+    ...layout,
+    shapeType,
+    points: undefined,
+  }
+}
+
+function normalizeLayout(
+  layout: LandAreaMapLayout,
+): LandAreaMapLayout {
+  const rawShapeType = (
+    layout as {
+      shapeType?: unknown
+    }
+  ).shapeType
+
+  const shapeType: SchematicShapeType =
+    isSchematicShapeType(rawShapeType)
+      ? rawShapeType
+      : 'rectangle'
+
+  if (shapeType === 'free') {
+    const rawPoints = (
+      layout as {
+        points?: unknown
+      }
+    ).points
+
+    const validPoints =
+      extractValidRelativePoints(rawPoints)
+
+    if (validPoints.length < 3) {
+      return {
+        ...layout,
+        shapeType: 'rectangle',
+        points: undefined,
+      }
+    }
+
+    return {
+      ...layout,
+      shapeType: 'free',
+      points: validPoints,
+    }
+  }
+
+  return {
+    ...layout,
+    shapeType,
+    points: undefined,
+  }
+}
+
+export function getLandAreaMapLayouts(): LandAreaMapLayout[] {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY)
+
+    if (!raw) {
+      return []
+    }
+
+    const parsed: unknown = JSON.parse(raw)
+
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    return parsed
+      .filter(isValidLayout)
+      .map(layout =>
+        normalizeLayout(layout),
+      )
+  } catch {
+    return []
+  }
+}
+
+export function saveLandAreaMapLayouts(
+  layouts: LandAreaMapLayout[],
+): void {
+  const valid = layouts
+    .filter(isValidLayout)
+    .map(layout =>
+      clampLayout(
+        normalizeLayout(layout),
+      ),
+    )
+
+  localStorage.setItem(
+    LAYOUT_KEY,
+    JSON.stringify(valid),
+  )
+}
+
+function isValidLayout(
+  value: unknown,
+): value is LandAreaMapLayout {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const v = value as Record<string, unknown>
+
+  return (
+    typeof v.landAreaId === 'string' &&
+    v.landAreaId.length > 0 &&
+    typeof v.x === 'number' &&
+    Number.isFinite(v.x) &&
+    typeof v.y === 'number' &&
+    Number.isFinite(v.y) &&
+    typeof v.width === 'number' &&
+    Number.isFinite(v.width) &&
+    v.width > 0 &&
+    typeof v.height === 'number' &&
+    Number.isFinite(v.height) &&
+    v.height > 0
+  )
+}
+
+function clampNumber(
+  value: number,
+  min: number,
+  max: number,
+): number {
+  if (!Number.isFinite(value)) {
+    return min
+  }
+
+  return Math.min(
+    Math.max(value, min),
+    max,
+  )
+}
+
+export function clampLayout(
+  layout: LandAreaMapLayout,
+): LandAreaMapLayout {
+  const width = clampNumber(
+    layout.width,
+    MIN_LAYOUT_SIZE,
+    MAP_CANVAS_WIDTH,
+  )
+
+  const height = clampNumber(
+    layout.height,
+    MIN_LAYOUT_SIZE,
+    MAP_CANVAS_HEIGHT,
+  )
+
+  const x = clampNumber(
+    layout.x,
+    0,
+    MAP_CANVAS_WIDTH - width,
+  )
+
+  const y = clampNumber(
+    layout.y,
+    0,
+    MAP_CANVAS_HEIGHT - height,
+  )
+
+  return {
+    ...layout,
+    x,
+    y,
+    width,
+    height,
+  }
+}
+
+function rectsOverlap(
+  a: {
+    x: number
+    y: number
+    width: number
+    height: number
+  },
+  b: {
+    x: number
+    y: number
+    width: number
+    height: number
+  },
+): boolean {
+  return !(
+    a.x + a.width <= b.x ||
+    b.x + b.width <= a.x ||
+    a.y + a.height <= b.y ||
+    b.y + b.height <= a.y
+  )
+}
+
+// -------------------- Geração automática --------------------
+
+export function generateAutoLayout(
+  areas: LandArea[],
+): LandAreaMapLayout[] {
+  if (areas.length === 0) {
+    return []
+  }
+
+  const sorted = [...areas].sort(
+    (a, b) =>
+      a.code.localeCompare(
+        b.code,
+        'pt-BR',
+      ),
+  )
+
+  const cols = Math.max(
+    1,
+    Math.ceil(
+      Math.sqrt(sorted.length),
+    ),
+  )
+
+  const rows = Math.max(
+    1,
+    Math.ceil(
+      sorted.length / cols,
+    ),
+  )
+
+  const usableW =
+    MAP_CANVAS_WIDTH -
+    CANVAS_PADDING * 2
+
+  const usableH =
+    MAP_CANVAS_HEIGHT -
+    CANVAS_PADDING * 2
+
+  const cellW =
+    usableW / cols
+
+  const cellH =
+    usableH / rows
+
+  const cellPadding = 8
+
+  const maxArea = Math.max(
+    0.01,
+    ...sorted.map(area =>
+      Math.max(
+        0.01,
+        area.areaHectares,
+      ),
+    ),
+  )
+
+  return sorted.map(
+    (area, index) => {
+      const col =
+        index % cols
+
+      const row =
+        Math.floor(
+          index / cols,
+        )
+
+      const cellX =
+        CANVAS_PADDING +
+        col * cellW
+
+      const cellY =
+        CANVAS_PADDING +
+        row * cellH
+
+      const innerMaxW =
+        Math.max(
+          20,
+          cellW -
+            cellPadding * 2,
+        )
+
+      const innerMaxH =
+        Math.max(
+          20,
+          cellH -
+            cellPadding * 2,
+        )
+
+      const innerMinW =
+        innerMaxW * 0.5
+
+      const innerMinH =
+        innerMaxH * 0.5
+
+      const ratio =
+        Math.sqrt(
+          Math.max(
+            0.01,
+            area.areaHectares,
+          ) / maxArea,
+        )
+
+      const boxW =
+        innerMinW +
+        (
+          innerMaxW -
+          innerMinW
+        ) *
+          ratio
+
+      const boxH =
+        innerMinH +
+        (
+          innerMaxH -
+          innerMinH
+        ) *
+          ratio
+
+      const x =
+        cellX +
+        (
+          cellW -
+          boxW
+        ) /
+          2
+
+      const y =
+        cellY +
+        (
+          cellH -
+          boxH
+        ) /
+          2
+
+      return {
+        landAreaId:
+          area.id,
+
+        x:
+          Math.round(
+            x * 100,
+          ) / 100,
+
+        y:
+          Math.round(
+            y * 100,
+          ) / 100,
+
+        width:
+          Math.round(
+            boxW * 100,
+          ) / 100,
+
+        height:
+          Math.round(
+            boxH * 100,
+          ) / 100,
+
+        shapeType:
+          'rectangle' as const,
+      }
+    },
+  )
+}
+
+function findFreePosition(
+  existing: LandAreaMapLayout[],
+  width: number,
+  height: number,
+): {
+  x: number
+  y: number
+} {
+  const step = 20
+
+  const maxX =
+    MAP_CANVAS_WIDTH -
+    width -
+    CANVAS_PADDING
+
+  const maxY =
+    MAP_CANVAS_HEIGHT -
+    height -
+    CANVAS_PADDING
+
+  for (
+    let y = CANVAS_PADDING;
+    y <= maxY;
+    y += step
+  ) {
+    for (
+      let x = CANVAS_PADDING;
+      x <= maxX;
+      x += step
+    ) {
+      const candidate = {
+        x,
+        y,
+        width,
+        height,
+      }
+
+      const overlaps =
+        existing.some(layout =>
+          rectsOverlap(
+            candidate,
+            layout,
+          ),
+        )
+
+      if (!overlaps) {
+        return {
+          x,
+          y,
+        }
+      }
+    }
+  }
+
+  return {
+    x: CANVAS_PADDING,
+    y: CANVAS_PADDING,
+  }
+}
+
+export function reconcileLayouts(
+  areas: LandArea[],
+  existingLayouts: LandAreaMapLayout[],
+): LandAreaMapLayout[] {
+  if (areas.length === 0) {
+    return []
+  }
+
+  const areaIds =
+    new Set(
+      areas.map(
+        area => area.id,
+      ),
+    )
+
+  const existingByArea =
+    new Map<
+      string,
+      LandAreaMapLayout
+    >()
+
+  for (const layout of existingLayouts) {
+    if (
+      areaIds.has(
+        layout.landAreaId,
+      )
+    ) {
+      existingByArea.set(
+        layout.landAreaId,
+        layout,
+      )
+    }
+  }
+
+  if (existingByArea.size === 0) {
+    return generateAutoLayout(
+      areas,
+    )
+  }
+
+  const result: LandAreaMapLayout[] = []
+  const working: LandAreaMapLayout[] = []
+
+  for (const area of areas) {
+    const existing =
+      existingByArea.get(
+        area.id,
+      )
+
+    if (existing) {
+      result.push(existing)
+      working.push(existing)
+    }
+  }
+
+  for (const area of areas) {
+    if (
+      existingByArea.has(
+        area.id,
+      )
+    ) {
+      continue
+    }
+
+    const pos =
+      findFreePosition(
+        working,
+        DEFAULT_NEW_LAYOUT_WIDTH,
+        DEFAULT_NEW_LAYOUT_HEIGHT,
+      )
+
+    const newLayout: LandAreaMapLayout = {
+      landAreaId: area.id,
+      x: pos.x,
+      y: pos.y,
+      width:
+        DEFAULT_NEW_LAYOUT_WIDTH,
+      height:
+        DEFAULT_NEW_LAYOUT_HEIGHT,
+      shapeType: 'rectangle',
+    }
+
+    result.push(newLayout)
+    working.push(newLayout)
+  }
+
+  return result
+}
+
+// -------------------- Geografia --------------------
+
+export function isValidGeoPoint(
+  value: unknown,
+): value is GeographicPoint {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+
+  const v = value as Record<string, unknown>
+
+  return (
+    typeof v.latitude === 'number' &&
+    Number.isFinite(v.latitude) &&
+    v.latitude >= -90 &&
+    v.latitude <= 90 &&
+    typeof v.longitude === 'number' &&
+    Number.isFinite(v.longitude) &&
+    v.longitude >= -180 &&
+    v.longitude <= 180
+  )
+}
+
+function isValidGeoPolygon(
+  points: unknown,
+): points is GeographicPoint[] {
+  if (!Array.isArray(points)) {
+    return false
+  }
+
+  if (points.length < 3) {
+    return false
+  }
+
+  return points.every(
+    isValidGeoPoint,
+  )
+}
+
+export function getPropertyGeographicBoundary():
+  | PropertyGeographicBoundary
+  | null {
+  try {
+    const raw =
+      localStorage.getItem(
+        GEO_PROPERTY_KEY,
+      )
+
+    if (!raw) {
+      return null
+    }
+
+    const parsed: unknown =
+      JSON.parse(raw)
+
+    if (
+      !parsed ||
+      typeof parsed !== 'object'
+    ) {
+      return null
+    }
+
+    const v =
+      parsed as Record<
+        string,
+        unknown
+      >
+
+    if (
+      !isValidGeoPolygon(
+        v.points,
+      )
+    ) {
+      return null
+    }
+
+    if (
+      typeof v.updatedAt !==
+      'string'
+    ) {
+      return null
+    }
+
+    return {
+      points: v.points,
+      updatedAt:
+        v.updatedAt,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function savePropertyGeographicBoundary(
+  boundary:
+    PropertyGeographicBoundary,
+): void {
+  if (
+    !isValidGeoPolygon(
+      boundary.points,
+    )
+  ) {
+    throw new Error(
+      'Polígono da propriedade inválido.',
+    )
+  }
+
+  localStorage.setItem(
+    GEO_PROPERTY_KEY,
+    JSON.stringify(
+      boundary,
+    ),
+  )
+}
+
+export function clearPropertyGeographicBoundary(): void {
+  localStorage.removeItem(
+    GEO_PROPERTY_KEY,
+  )
+}
+
+export function getLandAreaGeographicBoundaries():
+  LandAreaGeographicBoundary[] {
+  try {
+    const raw =
+      localStorage.getItem(
+        GEO_LANDAREAS_KEY,
+      )
+
+    if (!raw) {
+      return []
+    }
+
+    const parsed: unknown =
+      JSON.parse(raw)
+
+    if (
+      !Array.isArray(parsed)
+    ) {
+      return []
+    }
+
+    return parsed.filter(
+      (
+        item,
+      ): item is LandAreaGeographicBoundary => {
+        if (
+          !item ||
+          typeof item !==
+            'object'
+        ) {
+          return false
+        }
+
+        const v =
+          item as Record<
+            string,
+            unknown
+          >
+
+        return (
+          typeof v.landAreaId ===
+            'string' &&
+          v.landAreaId.length > 0 &&
+          isValidGeoPolygon(
+            v.points,
+          ) &&
+          typeof v.updatedAt ===
+            'string'
+        )
+      },
+    )
+  } catch {
+    return []
+  }
+}
+
+export function getLandAreaGeographicBoundary(
+  landAreaId: string,
+): LandAreaGeographicBoundary | null {
+  return (
+    getLandAreaGeographicBoundaries().find(
+      boundary =>
+        boundary.landAreaId ===
+        landAreaId,
+    ) ?? null
+  )
+}
+
+export function saveLandAreaGeographicBoundary(
+  boundary:
+    LandAreaGeographicBoundary,
+): void {
+  if (
+    !isValidGeoPolygon(
+      boundary.points,
+    )
+  ) {
+    throw new Error(
+      'Polígono da área inválido.',
+    )
+  }
+
+  const all =
+    getLandAreaGeographicBoundaries().filter(
+      item =>
+        item.landAreaId !==
+        boundary.landAreaId,
+    )
+
+  all.push(boundary)
+
+  localStorage.setItem(
+    GEO_LANDAREAS_KEY,
+    JSON.stringify(all),
+  )
+}
+
+export function deleteLandAreaGeographicBoundary(
+  landAreaId: string,
+): void {
+  const all =
+    getLandAreaGeographicBoundaries().filter(
+      boundary =>
+        boundary.landAreaId !==
+        landAreaId,
+    )
+
+  if (all.length === 0) {
+    localStorage.removeItem(
+      GEO_LANDAREAS_KEY,
+    )
+  } else {
+    localStorage.setItem(
+      GEO_LANDAREAS_KEY,
+      JSON.stringify(all),
+    )
+  }
+}
+
+// -------------------- Medições geográficas --------------------
+
+function degreesToRadians(
+  value: number,
+): number {
+  return (
+    value *
+    Math.PI /
+    180
+  )
+}
+
+function normalizeLongitudeDeltaRadians(
+  value: number,
+): number {
+  let normalized = value
+
+  while (
+    normalized >
+    Math.PI
+  ) {
+    normalized -=
+      2 * Math.PI
+  }
+
+  while (
+    normalized <
+    -Math.PI
+  ) {
+    normalized +=
+      2 * Math.PI
+  }
+
+  return normalized
+}
+
+export function hectaresToSquareMeters(
+  hectares: number,
+): number {
+  if (
+    !Number.isFinite(
+      hectares,
+    )
+  ) {
+    return 0
+  }
+
+  return Math.max(
+    0,
+    hectares * 10000,
+  )
+}
+
+export function calculateGeographicDistanceMeters(
+  start: GeographicPoint,
+  end: GeographicPoint,
+): number {
+  if (
+    !isValidGeoPoint(start) ||
+    !isValidGeoPoint(end)
+  ) {
+    return 0
+  }
+
+  const lat1 =
+    degreesToRadians(
+      start.latitude,
+    )
+
+  const lat2 =
+    degreesToRadians(
+      end.latitude,
+    )
+
+  const dLat =
+    lat2 - lat1
+
+  const dLon =
+    normalizeLongitudeDeltaRadians(
+      degreesToRadians(
+        end.longitude,
+      ) -
+        degreesToRadians(
+          start.longitude,
+        ),
+    )
+
+  const sinHalfLat =
+    Math.sin(
+      dLat / 2,
+    )
+
+  const sinHalfLon =
+    Math.sin(
+      dLon / 2,
+    )
+
+  const rawHaversine =
+    sinHalfLat *
+      sinHalfLat +
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      sinHalfLon *
+      sinHalfLon
+
+  const haversine =
+    Math.min(
+      1,
+      Math.max(
+        0,
+        rawHaversine,
+      ),
+    )
+
+  const centralAngle =
+    2 *
+    Math.atan2(
+      Math.sqrt(
+        haversine,
+      ),
+      Math.sqrt(
+        1 -
+          haversine,
+      ),
+    )
+
+  const distance =
+    EARTH_RADIUS_M *
+    centralAngle
+
+  if (
+    !Number.isFinite(
+      distance,
+    )
+  ) {
+    return 0
+  }
+
+  return Math.max(
+    0,
+    distance,
+  )
+}
+
+// -------------------- Cálculo de área geográfica --------------------
+
+export function calculateGeographicAreaHectares(
+  points:
+    GeographicPoint[],
+): number {
+  if (
+    !Array.isArray(
+      points,
+    ) ||
+    points.length < 3
+  ) {
+    return 0
+  }
+
+  for (
+    const point of points
+  ) {
+    if (
+      !isValidGeoPoint(
+        point,
+      )
+    ) {
+      return 0
+    }
+  }
+
+  let sum = 0
+
+  for (
+    let i = 0;
+    i < points.length;
+    i += 1
+  ) {
+    const p1 =
+      points[i]
+
+    const p2 =
+      points[
+        (i + 1) %
+          points.length
+      ]
+
+    const lat1 =
+      degreesToRadians(
+        p1.latitude,
+      )
+
+    const lat2 =
+      degreesToRadians(
+        p2.latitude,
+      )
+
+    const lon1 =
+      degreesToRadians(
+        p1.longitude,
+      )
+
+    const lon2 =
+      degreesToRadians(
+        p2.longitude,
+      )
+
+    const dLon =
+      normalizeLongitudeDeltaRadians(
+        lon2 - lon1,
+      )
+
+    sum +=
+      dLon *
+      (
+        2 +
+        Math.sin(lat1) +
+        Math.sin(lat2)
+      )
+  }
+
+  const areaM2 =
+    Math.abs(
+      (
+        sum *
+        EARTH_RADIUS_M *
+        EARTH_RADIUS_M
+      ) /
+        2,
+    )
+
+  if (
+    !Number.isFinite(
+      areaM2,
+    )
+  ) {
+    return 0
+  }
+
+  return (
+    areaM2 / 10000
+  )
+}
+
+========================================================================
+ARQUIVO: src/services/intelligenceContextService.ts
+========================================================================
+
+import {
+  Animal,
+  FinancialCategory,
+  IntelligenceActionCapabilities,
+  IntelligenceContext,
+  IntelligenceContextAgenda,
+  IntelligenceContextAnimals,
+  IntelligenceContextCrops,
+  IntelligenceContextFinance,
+  IntelligenceContextFinanceCategory,
+  IntelligenceContextFinanceCategoryOption,
+  IntelligenceContextHealth,
+  IntelligenceContextHealthEntry,
+  IntelligenceContextInventory,
+  IntelligenceContextInventoryItem,
+  IntelligenceContextInventoryItemOption,
+  IntelligenceContextLand,
+  IntelligenceContextLandLandAreaOption,
+  IntelligenceContextList,
+  IntelligenceContextMachineOption,
+  IntelligenceContextMachines,
+  IntelligenceContextMap,
+  IntelligenceContextMapLandArea,
+  InventoryItem,
+  Machine,
+  PermissionKey,
+  User,
+} from '../types'
+import { userHasPermission } from './permissionService'
+import { getAnimals } from './animalService'
+import {
+  getHealthOccurrences,
+  getTreatments,
+  getVaccinations,
+  getVaccinationStatus,
+} from './healthService'
+import { getLandAreas } from './landService'
+import { getActivePaddockOccupations } from './paddockOccupationService'
+import { getCropCycles } from './cropService'
+import { getMachines } from './machineService'
+import {
+  getInventoryItems,
+  isBelowMinimum,
+} from './inventoryService'
+import {
+  getFinancialCategories,
+  getFinancialTransactions,
+} from './financeService'
+import { getAgendaEntriesForUser } from './agendaService'
+import {
+  calculateGeographicAreaHectares,
+  getLandAreaGeographicBoundaries,
+  getPropertyGeographicBoundary,
+} from './propertyMapService'
+import {
+  addDaysToCivilDate,
+  getExpirationStatus,
+  todayDateString,
+} from '../utils/date'
+
+const ALL_MODULE_PERMISSIONS: PermissionKey[] = [
+  'animals',
+  'health',
+  'land',
+  'crops',
+  'machines',
+  'inventory',
+  'finance',
+  'agenda',
+  'map',
+]
+
+const MODULE_KEYWORDS:
+  Partial<Record<PermissionKey, string[]>> = {
+    animals: [
+      'animal',
+      'animais',
+      'rebanho',
+      'bovino',
+      'gado',
+      'lote',
+      'espécie',
+      'categoria',
+      'bezerro',
+      'vaca',
+      'touro',
+    ],
+    health: [
+      'saúde',
+      'vacina',
+      'vacinação',
+      'tratamento',
+      'ocorrência',
+      'doença',
+      'sintoma',
+      'ferimento',
+    ],
+    land: [
+      'terra',
+      'terras',
+      'piquete',
+      'talhão',
+      'pastagem',
+      'hectare',
+      'descanso',
+      'recuperação',
+    ],
+    crops: [
+      'cultivo',
+      'plantio',
+      'colheita',
+      'safra',
+      'cultura',
+      'manejo',
+      'solo',
+    ],
+    machines: [
+      'máquina',
+      'máquinas',
+      'trator',
+      'equipamento',
+      'manutenção',
+      'operacional',
+      'horímetro',
+    ],
+    inventory: [
+      'estoque',
+      'produto',
+      'quantidade',
+      'validade',
+      'item',
+      'reposição',
+      'entrada',
+      'saída',
+      'baixa',
+    ],
+    finance: [
+      'financeiro',
+      'receita',
+      'despesa',
+      'saldo',
+      'gasto',
+      'custo',
+      'dinheiro',
+      'valor',
+      'pago',
+      'pagamento',
+    ],
+    agenda: [
+      'agenda',
+      'atividade',
+      'tarefa',
+      'compromisso',
+      'prazo',
+      'pendente',
+      'atrasada',
+    ],
+    map: [
+      'mapa',
+      'demarcação',
+      'demarcada',
+      'geográfic',
+      'satélite',
+      'coordenada',
+    ],
+  }
+
+const MAX_LIST_ITEMS = 20
+
+function makeList<T>(
+  items: T[],
+): IntelligenceContextList<T> {
+  if (items.length <= MAX_LIST_ITEMS) {
+    return {
+      total: items.length,
+      truncated: false,
+      items,
+    }
+  }
+
+  return {
+    total: items.length,
+    truncated: true,
+    items: items.slice(
+      0,
+      MAX_LIST_ITEMS,
+    ),
+  }
+}
+
+function normalizeKey(
+  value: string,
+): string {
+  return value
+    .toLowerCase()
+    .trim()
+}
+
+function prioritizeByKeys<T>(
+  items: T[],
+  question: string,
+  getKeys: (item: T) => string[],
+): T[] {
+  if (!question) return items
+
+  const q =
+    question.toLowerCase()
+
+  const mentioned: T[] = []
+  const others: T[] = []
+
+  for (const item of items) {
+    const hit =
+      getKeys(item).some(key => {
+        const normalized =
+          normalizeKey(key)
+
+        return (
+          normalized.length > 1 &&
+          q.includes(normalized)
+        )
+      })
+
+    if (hit) {
+      mentioned.push(item)
+    } else {
+      others.push(item)
+    }
+  }
+
+  return [
+    ...mentioned,
+    ...others,
+  ]
+}
+
+interface PrioritizableByLabels {
+  name?: string
+  code?: string
+}
+
+function prioritizeMentioned<
+  T extends PrioritizableByLabels,
+>(
+  items: T[],
+  question: string,
+): T[] {
+  return prioritizeByKeys(
+    items,
+    question,
+    item => [
+      item.name ?? '',
+      item.code ?? '',
+    ],
+  )
+}
+
+export function selectModulesForQuestion(
+  question: string,
+): PermissionKey[] {
+  const normalized =
+    question.toLowerCase()
+
+  const selected =
+    new Set<PermissionKey>()
+
+  for (
+    const moduleKey
+    of ALL_MODULE_PERMISSIONS
+  ) {
+    const keywords =
+      MODULE_KEYWORDS[moduleKey]
+
+    if (!keywords) continue
+
+    for (const keyword of keywords) {
+      if (
+        normalized.includes(keyword)
+      ) {
+        selected.add(moduleKey)
+        break
+      }
+    }
+  }
+
+  if (selected.size === 0) {
+    return [
+      ...ALL_MODULE_PERMISSIONS,
+    ]
+  }
+
+  return Array.from(selected)
+}
+
+function buildAnimalsContext(
+  animals: Animal[],
+): IntelligenceContextAnimals {
+  const bySpecies:
+    Record<string, number> = {}
+
+  const byStatus:
+    Record<string, number> = {}
+
+  for (const animal of animals) {
+    bySpecies[animal.species] =
+      (
+        bySpecies[
+          animal.species
+        ] ?? 0
+      ) + 1
+
+    byStatus[animal.status] =
+      (
+        byStatus[
+          animal.status
+        ] ?? 0
+      ) + 1
+  }
+
+  return {
+    total: animals.length,
+    active:
+      animals.filter(
+        animal =>
+          animal.status === 'Ativo',
+      ).length,
+    bySpecies,
+    byStatus,
+  }
+}
+
+function buildHealthContext(
+  user: User,
+  animalById:
+    Map<string, Animal>,
+): IntelligenceContextHealth {
+  const canSeeAnimalIdentity =
+    userHasPermission(
+      user,
+      'animals',
+    )
+
+  const today =
+    todayDateString()
+
+  const sevenDays =
+    addDaysToCivilDate(
+      today,
+      7,
+    )
+
+  function label(
+    animalId: string,
+  ): string | undefined {
+    if (
+      !canSeeAnimalIdentity
+    ) {
+      return undefined
+    }
+
+    const animal =
+      animalById.get(animalId)
+
+    if (!animal) {
+      return undefined
+    }
+
+    return animal.name
+      ? `${animal.identification} — ${animal.name}`
+      : animal.identification
+  }
+
+  const overdue:
+    IntelligenceContextHealthEntry[] =
+      []
+
+  const upcoming:
+    IntelligenceContextHealthEntry[] =
+      []
+
+  const ongoing:
+    IntelligenceContextHealthEntry[] =
+      []
+
+  const openOccurrences:
+    IntelligenceContextHealthEntry[] =
+      []
+
+  for (
+    const vaccination
+    of getVaccinations()
+  ) {
+    const status =
+      getVaccinationStatus(
+        vaccination,
+      )
+
+    if (status === 'Vencida') {
+      const entry:
+        IntelligenceContextHealthEntry =
+          {
+            description:
+              `${vaccination.vaccineName} (vencida em ${
+                vaccination.nextDoseDate ??
+                'data não informada'
+              })`,
+          }
+
+      const animalLabel =
+        label(
+          vaccination.animalId,
+        )
+
+      if (animalLabel) {
+        entry.animalLabel =
+          animalLabel
+      }
+
+      overdue.push(entry)
+    } else if (
+      status === 'Próxima'
+    ) {
+      const entry:
+        IntelligenceContextHealthEntry =
+          {
+            description:
+              `${vaccination.vaccineName} (próxima dose em ${
+                vaccination.nextDoseDate ??
+                'data não informada'
+              })`,
+          }
+
+      const animalLabel =
+        label(
+          vaccination.animalId,
+        )
+
+      if (animalLabel) {
+        entry.animalLabel =
+          animalLabel
+      }
+
+      upcoming.push(entry)
+    }
+  }
+
+  for (
+    const treatment
+    of getTreatments()
+  ) {
+    if (
+      treatment.status !==
+      'Em andamento'
+    ) {
+      continue
+    }
+
+    let description =
+      treatment.reason
+
+    if (treatment.endDate) {
+      if (
+        treatment.endDate <
+        today
+      ) {
+        description +=
+          ` (prazo vencido em ${treatment.endDate})`
+      } else if (
+        treatment.endDate <=
+        sevenDays
+      ) {
+        description +=
+          ` (termina em ${treatment.endDate})`
+      }
+    }
+
+    const entry:
+      IntelligenceContextHealthEntry =
+        { description }
+
+    const animalLabel =
+      label(
+        treatment.animalId,
+      )
+
+    if (animalLabel) {
+      entry.animalLabel =
+        animalLabel
+    }
+
+    ongoing.push(entry)
+  }
+
+  for (
+    const occurrence
+    of getHealthOccurrences()
+  ) {
+    if (
+      occurrence.status !==
+      'Aberta'
+    ) {
+      continue
+    }
+
+    const entry:
+      IntelligenceContextHealthEntry =
+        {
+          description:
+            `${occurrence.title} (${occurrence.severity})`,
+        }
+
+    const animalLabel =
+      label(
+        occurrence.animalId,
+      )
+
+    if (animalLabel) {
+      entry.animalLabel =
+        animalLabel
+    }
+
+    openOccurrences.push(entry)
+  }
+
+  return {
+    overdueVaccinations:
+      makeList(overdue),
+    upcomingVaccinations:
+      makeList(upcoming),
+    ongoingTreatments:
+      makeList(ongoing),
+    openOccurrences:
+      makeList(
+        openOccurrences,
+      ),
+  }
+}
+
+function buildInventoryContext(
+  items: InventoryItem[],
+  question: string,
+): IntelligenceContextInventory {
+  const active =
+    items.filter(
+      item =>
+        item.status === 'Ativo',
+    )
+
+  const zeroed:
+    IntelligenceContextInventoryItem[] =
+      []
+
+  const belowMin:
+    IntelligenceContextInventoryItem[] =
+      []
+
+  const expiring:
+    IntelligenceContextInventoryItem[] =
+      []
+
+  for (const item of active) {
+    const base:
+      IntelligenceContextInventoryItem =
+        {
+          code: item.code,
+          name: item.name,
+          quantity:
+            item.currentQuantity,
+          unit: item.unit,
+          minimum:
+            item.minimumQuantity,
+        }
+
+    if (
+      item.currentQuantity === 0
+    ) {
+      zeroed.push(base)
+    } else if (
+      isBelowMinimum(item)
+    ) {
+      belowMin.push(base)
+    }
+
+    if (
+      item.expirationDate
+    ) {
+      const status =
+        getExpirationStatus(
+          item.expirationDate,
+        )
+
+      if (
+        status === 'Vencido' ||
+        status ===
+          'Vence em breve'
+      ) {
+        expiring.push(base)
+      }
+    }
+  }
+
+  const optionList:
+    IntelligenceContextInventoryItemOption[] =
+      active
+        .map(item => ({
+          id: item.id,
+          code: item.code,
+          name: item.name,
+          unit: item.unit,
+          currentQuantity:
+            item.currentQuantity,
+        }))
+        .sort(
+          (a, b) =>
+            a.code.localeCompare(
+              b.code,
+              'pt-BR',
+            ),
+        )
+
+  const prioritized =
+    prioritizeMentioned(
+      optionList,
+      question,
+    )
+
+  return {
+    activeItems:
+      active.length,
+    zeroedItems:
+      makeList(zeroed),
+    belowMinimumItems:
+      makeList(belowMin),
+    expiringItems:
+      makeList(expiring),
+    itemsLimited:
+      makeList(prioritized),
+  }
+}
+
+function buildFinanceContext(
+  categories: FinancialCategory[],
+  question: string,
+): IntelligenceContextFinance {
+  const transactions =
+    getFinancialTransactions()
+
+  let totalRevenues = 0
+  let totalExpenses = 0
+
+  const categoryById =
+    new Map(
+      categories.map(
+        category => [
+          category.id,
+          category,
+        ],
+      ),
+    )
+
+  const expenseByCategory =
+    new Map<
+      string,
+      number
+    >()
+
+  for (
+    const transaction
+    of transactions
+  ) {
+    if (
+      !Number.isFinite(
+        transaction.amount,
+      )
+    ) {
+      continue
+    }
+
+    if (
+      transaction.type ===
+      'Receita'
+    ) {
+      totalRevenues +=
+        transaction.amount
+    } else if (
+      transaction.type ===
+      'Despesa'
+    ) {
+      totalExpenses +=
+        transaction.amount
+
+      const label =
+        categoryById.get(
+          transaction.categoryId,
+        )?.name ??
+        'Categoria não encontrada'
+
+      expenseByCategory.set(
+        label,
+        (
+          expenseByCategory.get(
+            label,
+          ) ?? 0
+        ) +
+          transaction.amount,
+      )
+    }
+  }
+
+  const topRaw:
+    IntelligenceContextFinanceCategory[] =
+      Array.from(
+        expenseByCategory.entries(),
+      )
+        .map(
+          ([
+            label,
+            amount,
+          ]) => ({
+            label,
+            amount,
+          }),
+        )
+        .sort((a, b) => {
+          if (
+            b.amount !== a.amount
+          ) {
+            return (
+              b.amount -
+              a.amount
+            )
+          }
+
+          return a.label.localeCompare(
+            b.label,
+            'pt-BR',
+          )
+        })
+
+  const topPrioritized =
+    prioritizeByKeys(
+      topRaw,
+      question,
+      item => [
+        item.label,
+      ],
+    )
+
+  const categoryOptions:
+    IntelligenceContextFinanceCategoryOption[] =
+      categories
+        .map(category => ({
+          id: category.id,
+          name:
+            category.name,
+          type:
+            category.type,
+        }))
+        .sort(
+          (a, b) =>
+            a.name.localeCompare(
+              b.name,
+              'pt-BR',
+            ),
+        )
+
+  const categoryPrioritized =
+    prioritizeMentioned(
+      categoryOptions,
+      question,
+    )
+
+  return {
+    totalRevenues,
+    totalExpenses,
+    balance:
+      totalRevenues -
+      totalExpenses,
+    topExpenseCategories:
+      makeList(
+        topPrioritized,
+      ),
+    categoriesLimited:
+      makeList(
+        categoryPrioritized,
+      ),
+  }
+}
+
+function buildLandContext(
+  question: string,
+): IntelligenceContextLand {
+  const areas =
+    getLandAreas()
+
+  const byStatus:
+    Record<string, number> = {}
+
+  for (const area of areas) {
+    byStatus[area.status] =
+      (
+        byStatus[
+          area.status
+        ] ?? 0
+      ) + 1
+  }
+
+  const areaOptions:
+    IntelligenceContextLandLandAreaOption[] =
+      areas
+        .map(area => ({
+          id: area.id,
+          code: area.code,
+          name: area.name,
+        }))
+        .sort(
+          (a, b) =>
+            a.code.localeCompare(
+              b.code,
+              'pt-BR',
+            ),
+        )
+
+  const prioritized =
+    prioritizeMentioned(
+      areaOptions,
+      question,
+    )
+
+  return {
+    totalAreas:
+      areas.length,
+    byStatus,
+    occupiedPaddocks:
+      getActivePaddockOccupations()
+        .length,
+    areasLimited:
+      makeList(prioritized),
+  }
+}
+
+function buildCropsContext():
+  IntelligenceContextCrops {
+  const cycles =
+    getCropCycles()
+
+  const today =
+    todayDateString()
+
+  const sevenDays =
+    addDaysToCivilDate(
+      today,
+      7,
+    )
+
+  const upcoming:
+    string[] = []
+
+  const overdue:
+    string[] = []
+
+  for (const cycle of cycles) {
+    if (
+      cycle.status !==
+        'Planejado' &&
+      cycle.status !==
+        'Em andamento'
+    ) {
+      continue
+    }
+
+    if (
+      !cycle.expectedHarvestDate
+    ) {
+      continue
+    }
+
+    const label =
+      `${cycle.crop} (${cycle.season})`
+
+    if (
+      cycle.expectedHarvestDate <
+      today
+    ) {
+      overdue.push(
+        `${label} — prevista ${cycle.expectedHarvestDate}`,
+      )
+    } else if (
+      cycle.expectedHarvestDate <=
+      sevenDays
+    ) {
+      upcoming.push(
+        `${label} — prevista ${cycle.expectedHarvestDate}`,
+      )
+    }
+  }
+
+  return {
+    activeCycles:
+      cycles.filter(
+        cycle =>
+          cycle.status ===
+          'Em andamento',
+      ).length,
+    plannedCycles:
+      cycles.filter(
+        cycle =>
+          cycle.status ===
+          'Planejado',
+      ).length,
+    upcomingHarvests:
+      makeList(upcoming),
+    overdueHarvests:
+      makeList(overdue),
+  }
+}
+
+function buildMachinesContext(
+  machines: Machine[],
+  question: string,
+): IntelligenceContextMachines {
+  const optionList:
+    IntelligenceContextMachineOption[] =
+      machines
+        .map(machine => ({
+          code: machine.code,
+          name: machine.name,
+          status:
+            machine.status,
+        }))
+        .sort(
+          (a, b) =>
+            a.code.localeCompare(
+              b.code,
+              'pt-BR',
+            ),
+        )
+
+  const maintenanceList =
+    optionList.filter(
+      machine =>
+        machine.status ===
+        'Em manutenção',
+    )
+
+  const prioritizedList =
+    prioritizeMentioned(
+      optionList,
+      question,
+    )
+
+  return {
+    total:
+      machines.length,
+    operational:
+      machines.filter(
+        machine =>
+          machine.status ===
+          'Operacional',
+      ).length,
+    maintenance:
+      maintenanceList.length,
+    inactive:
+      machines.filter(
+        machine =>
+          machine.status ===
+          'Inativa',
+      ).length,
+    maintenanceMachines:
+      makeList(
+        maintenanceList,
+      ),
+    machinesList:
+      makeList(
+        prioritizedList,
+      ),
+  }
+}
+
+function buildAgendaContext(
+  user: User,
+): IntelligenceContextAgenda {
+  const entries =
+    getAgendaEntriesForUser(
+      user,
+    ).filter(
+      entry =>
+        entry.source ===
+        'manual',
+    )
+
+  const overdue:
+    string[] = []
+
+  const highPriorityPending:
+    string[] = []
+
+  for (const entry of entries) {
+    if (
+      entry.status ===
+      'Atrasada'
+    ) {
+      overdue.push(
+        `${entry.title} (${entry.date})`,
+      )
+    } else if (
+      entry.status ===
+        'Pendente' &&
+      entry.priority ===
+        'Alta'
+    ) {
+      highPriorityPending.push(
+        `${entry.title} (${entry.date})`,
+      )
+    }
+  }
+
+  return {
+    overdue:
+      makeList(overdue),
+    highPriorityPending:
+      makeList(
+        highPriorityPending,
+      ),
+  }
+}
+
+function buildMapContext(
+  user: User,
+): IntelligenceContextMap {
+  const propertyBoundary =
+    getPropertyGeographicBoundary()
+
+  let propertyAreaHa:
+    number | null = null
+
+  let propertyAreaM2:
+    number | null = null
+
+  if (propertyBoundary) {
+    propertyAreaHa =
+      calculateGeographicAreaHectares(
+        propertyBoundary.points,
+      )
+
+    propertyAreaM2 =
+      propertyAreaHa * 10000
+  }
+
+  const demarcatedAreas:
+    IntelligenceContextMapLandArea[] =
+      []
+
+  if (
+    userHasPermission(
+      user,
+      'land',
+    )
+  ) {
+    const areas =
+      getLandAreas()
+
+    const areaById =
+      new Map(
+        areas.map(area => [
+          area.id,
+          area,
+        ]),
+      )
+
+    const boundaries =
+      getLandAreaGeographicBoundaries()
+
+    for (
+      const boundary
+      of boundaries
+    ) {
+      const area =
+        areaById.get(
+          boundary.landAreaId,
+        )
+
+      if (!area) continue
+
+      const demarcadaHa =
+        calculateGeographicAreaHectares(
+          boundary.points,
+        )
+
+      demarcatedAreas.push({
+        code: area.code,
+        name: area.name,
+        cadastradaHa:
+          area.areaHectares,
+        demarcadaHa,
+        diffHa:
+          Math.abs(
+            area.areaHectares -
+            demarcadaHa,
+          ),
+      })
+    }
+  }
+
+  demarcatedAreas.sort(
+    (a, b) => {
+      if (
+        b.diffHa !== a.diffHa
+      ) {
+        return (
+          b.diffHa -
+          a.diffHa
+        )
+      }
+
+      return a.code.localeCompare(
+        b.code,
+        'pt-BR',
+      )
+    },
+  )
+
+  return {
+    propertyAreaHa,
+    propertyAreaM2,
+    demarcatedAreas:
+      makeList(
+        demarcatedAreas,
+      ),
+  }
+}
+
+function buildCapabilities(
+  user: User,
+): IntelligenceActionCapabilities {
+  const land =
+    userHasPermission(
+      user,
+      'land',
+    )
+
+  return {
+    canCreateLandArea:
+      land,
+    canCreateAnimal:
+      userHasPermission(
+        user,
+        'animals',
+      ),
+    canCreateAgendaActivity:
+      userHasPermission(
+        user,
+        'agenda',
+      ),
+    canCreateFinancialTransaction:
+      userHasPermission(
+        user,
+        'finance',
+      ),
+    canCreateInventoryMovement:
+      userHasPermission(
+        user,
+        'inventory',
+      ),
+    canCreateCropCycle:
+      userHasPermission(
+        user,
+        'crops',
+      ) && land,
+    canUpdateMachineStatus:
+      userHasPermission(
+        user,
+        'machines',
+      ),
+  }
+}
+
+export function buildIntelligenceContext(
+  user: User,
+  question: string,
+): IntelligenceContext {
+  const selected =
+    selectModulesForQuestion(
+      question,
+    )
+
+  const context:
+    IntelligenceContext = {
+      metadata: {
+        generatedAt:
+          new Date().toISOString(),
+        capabilities:
+          buildCapabilities(user),
+      },
+    }
+
+  const can = (
+    permission: PermissionKey,
+  ) =>
+    userHasPermission(
+      user,
+      permission,
+    )
+
+  const wants = (
+    permission: PermissionKey,
+  ) =>
+    selected.includes(
+      permission,
+    )
+
+  const wantsAnimals =
+    can('animals') &&
+    wants('animals')
+
+  const wantsHealth =
+    can('health') &&
+    wants('health')
+
+  const needsAnimalData =
+    wantsAnimals ||
+    (
+      wantsHealth &&
+      can('animals')
+    )
+
+  const animals:
+    Animal[] =
+      needsAnimalData
+        ? getAnimals()
+        : []
+
+  const animalById =
+    new Map(
+      animals.map(
+        animal => [
+          animal.id,
+          animal,
+        ],
+      ),
+    )
+
+  if (wantsAnimals) {
+    context.animals =
+      buildAnimalsContext(
+        animals,
+      )
+  }
+
+  if (wantsHealth) {
+    context.health =
+      buildHealthContext(
+        user,
+        animalById,
+      )
+  }
+
+  if (
+    can('land') &&
+    wants('land')
+  ) {
+    context.land =
+      buildLandContext(
+        question,
+      )
+  }
+
+  if (
+    can('crops') &&
+    wants('crops')
+  ) {
+    context.crops =
+      buildCropsContext()
+  }
+
+  if (
+    can('machines') &&
+    wants('machines')
+  ) {
+    context.machines =
+      buildMachinesContext(
+        getMachines(),
+        question,
+      )
+  }
+
+  if (
+    can('inventory') &&
+    wants('inventory')
+  ) {
+    context.inventory =
+      buildInventoryContext(
+        getInventoryItems(),
+        question,
+      )
+  }
+
+  if (
+    can('finance') &&
+    wants('finance')
+  ) {
+    context.finance =
+      buildFinanceContext(
+        getFinancialCategories(),
+        question,
+      )
+  }
+
+  if (
+    can('agenda') &&
+    wants('agenda')
+  ) {
+    context.agenda =
+      buildAgendaContext(user)
+  }
+
+  if (
+    can('map') &&
+    wants('map')
+  ) {
+    context.map =
+      buildMapContext(user)
+  }
+
+  return context
+}

@@ -1,0 +1,2889 @@
+AGRO360 — ETAPA 14 — CÓDIGO REAL
+BLOCO 1/13
+========================================================================
+
+========================================================================
+ARQUIVO: src/types/index.ts
+========================================================================
+
+export type UserRole = 'admin' | 'user'
+
+export type PermissionKey =
+  | 'animals'
+  | 'health'
+  | 'land'
+  | 'crops'
+  | 'machines'
+  | 'inventory'
+  | 'finance'
+  | 'property'
+  | 'agenda'
+  | 'reports'
+  | 'map'
+  | 'intelligence'
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  employeeId?: string
+  permissions?: PermissionKey[]
+}
+
+export interface Farm {
+  id: string
+  name: string
+  location: string
+  totalArea: number
+  owner: string
+}
+
+export interface DashboardStats {
+  animalsCount: number
+  pendingVaccines: number
+  areasCount: number
+  activeCultivations: number
+  upcomingActivities: number
+}
+
+export interface Activity {
+  id: string
+  title: string
+  date: string
+  type:
+    | 'vaccine'
+    | 'treatment'
+    | 'planting'
+    | 'harvest'
+    | 'maintenance'
+  status:
+    | 'pending'
+    | 'done'
+    | 'overdue'
+}
+
+// -------------------- Animais --------------------
+
+export type AnimalSpecies =
+  | 'Bovino'
+  | 'Bubalino'
+  | 'Ovino'
+  | 'Caprino'
+  | 'Equino'
+  | 'Suíno'
+  | 'Outro'
+
+export type AnimalSex =
+  | 'Macho'
+  | 'Fêmea'
+
+export type AnimalCategory =
+  | 'Bezerro'
+  | 'Bezerra'
+  | 'Novilho'
+  | 'Novilha'
+  | 'Vaca'
+  | 'Touro'
+  | 'Boi'
+  | 'Matriz'
+  | 'Reprodutor'
+  | 'Outro'
+
+export type AnimalStatus =
+  | 'Ativo'
+  | 'Vendido'
+  | 'Morto'
+  | 'Descartado'
+  | 'Transferido'
+
+export interface Animal {
+  id: string
+  identification: string
+  name?: string
+  species: AnimalSpecies
+  breed: string
+  sex: AnimalSex
+  birthDate?: string
+  category: AnimalCategory
+  status: AnimalStatus
+  lotId?: string
+  currentWeight?: number
+  origin?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Lot {
+  id: string
+  name: string
+  description?: string
+  createdAt: string
+}
+
+export type AnimalEventType =
+  | 'created'
+  | 'updated'
+  | 'lot_change'
+  | 'status_change'
+
+export interface AnimalEvent {
+  id: string
+  animalId: string
+  type: AnimalEventType
+  description: string
+  date: string
+}
+
+// -------------------- Saúde Animal --------------------
+
+export interface Vaccination {
+  id: string
+  animalId: string
+  vaccineName: string
+  applicationDate: string
+  nextDoseDate?: string
+  dose?: string
+  batch?: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type VaccinationStatus =
+  | 'Sem próxima dose'
+  | 'Em dia'
+  | 'Próxima'
+  | 'Vencida'
+
+export type TreatmentStatus =
+  | 'Em andamento'
+  | 'Concluído'
+  | 'Interrompido'
+
+export interface Treatment {
+  id: string
+  animalId: string
+  reason: string
+  medication?: string
+  dosage?: string
+  startDate: string
+  endDate?: string
+  responsible?: string
+  notes?: string
+  status: TreatmentStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export type HealthOccurrenceType =
+  | 'Doença'
+  | 'Sintoma'
+  | 'Ferimento'
+  | 'Exame'
+  | 'Observação clínica'
+  | 'Outro'
+
+export type HealthSeverity =
+  | 'Baixa'
+  | 'Média'
+  | 'Alta'
+
+export type HealthOccurrenceStatus =
+  | 'Aberta'
+  | 'Resolvida'
+
+export interface HealthOccurrence {
+  id: string
+  animalId: string
+  date: string
+  type: HealthOccurrenceType
+  title: string
+  description?: string
+  severity: HealthSeverity
+  status: HealthOccurrenceStatus
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Terras --------------------
+
+export type LandAreaType =
+  | 'Piquete'
+  | 'Talhão'
+  | 'Pastagem'
+  | 'Reserva/APP'
+  | 'Infraestrutura'
+  | 'Área ociosa'
+  | 'Outro'
+
+export type LandAreaStatus =
+  | 'Em uso'
+  | 'Em descanso'
+  | 'Em recuperação'
+  | 'Inativa'
+
+export interface LandArea {
+  id: string
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  purpose?: string
+  status: LandAreaStatus
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Piquetes --------------------
+
+export interface PaddockOccupation {
+  id: string
+  landAreaId: string
+  lotId: string
+  entryDate: string
+  exitDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Estruturas --------------------
+
+export type RuralStructureType =
+  | 'Cerca'
+  | 'Corredor'
+  | 'Porteira'
+
+export type RuralStructureStatus =
+  | 'Em uso'
+  | 'Em manutenção'
+  | 'Inativa'
+
+export type RuralStructureCondition =
+  | 'Boa'
+  | 'Regular'
+  | 'Ruim'
+
+export interface RuralStructure {
+  id: string
+  code: string
+  name: string
+  type: RuralStructureType
+  landAreaIds: string[]
+  status: RuralStructureStatus
+  condition: RuralStructureCondition
+  lengthMeters?: number
+  widthMeters?: number
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Uso da Terra --------------------
+
+export type LandUseType =
+  | 'Uso produtivo'
+  | 'Descanso'
+  | 'Recuperação'
+  | 'Preservação'
+  | 'Manutenção'
+  | 'Outro'
+
+export interface LandUseRecord {
+  id: string
+  landAreaId: string
+  type: LandUseType
+  startDate: string
+  endDate?: string
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Cultivos --------------------
+
+export type CropCycleStatus =
+  | 'Planejado'
+  | 'Em andamento'
+  | 'Concluído'
+  | 'Cancelado'
+
+export interface CropCycle {
+  id: string
+  landAreaId: string
+  crop: string
+  cultivar?: string
+  season: string
+  status: CropCycleStatus
+  plantingDate?: string
+  expectedHarvestDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Solo --------------------
+
+export interface SoilAnalysis {
+  id: string
+  landAreaId: string
+  sampleDate: string
+  laboratory?: string
+  sampleCode?: string
+  sampleDepth?: string
+  ph?: number
+  organicMatter?: number
+  phosphorus?: number
+  potassium?: number
+  calcium?: number
+  magnesium?: number
+  aluminum?: number
+  cec?: number
+  baseSaturation?: number
+  aluminumSaturation?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Manejos Agrícolas --------------------
+
+export type CropManagementType =
+  | 'Adubação'
+  | 'Irrigação'
+  | 'Pulverização'
+  | 'Capina'
+  | 'Controle de plantas daninhas'
+  | 'Controle de pragas'
+  | 'Controle de doenças'
+  | 'Manejo cultural'
+  | 'Outro'
+
+export interface CropManagement {
+  id: string
+  cropCycleId: string
+  date: string
+  type: CropManagementType
+  description: string
+  productOrMaterial?: string
+  doseOrQuantity?: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Colheita --------------------
+
+export type HarvestProductionUnit =
+  | 'kg'
+  | 't'
+  | 'sc'
+
+export interface HarvestRecord {
+  id: string
+  cropCycleId: string
+  harvestDate: string
+  harvestedAreaHectares: number
+  productionQuantity: number
+  productionUnit: HarvestProductionUnit
+  sackWeightKg?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Máquinas --------------------
+
+export type MachineCategory =
+  | 'Trator'
+  | 'Colheitadeira'
+  | 'Pulverizador'
+  | 'Plantadeira'
+  | 'Semeadora'
+  | 'Grade'
+  | 'Arado'
+  | 'Roçadeira'
+  | 'Distribuidor'
+  | 'Implemento'
+  | 'Veículo'
+  | 'Outro'
+
+export type MachineStatus =
+  | 'Operacional'
+  | 'Em manutenção'
+  | 'Inativa'
+
+export interface Machine {
+  id: string
+  code: string
+  name: string
+  category: MachineCategory
+  brand?: string
+  model?: string
+  year?: number
+  identification?: string
+  hourMeter?: number
+  status: MachineStatus
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Manutenção --------------------
+
+export type MachineMaintenanceType =
+  | 'Preventiva'
+  | 'Corretiva'
+  | 'Inspeção'
+  | 'Lubrificação'
+  | 'Troca de óleo'
+  | 'Troca de filtros'
+  | 'Reparo'
+  | 'Outro'
+
+export interface MachineMaintenanceRecord {
+  id: string
+  machineId: string
+  maintenanceDate: string
+  type: MachineMaintenanceType
+  hourMeter?: number
+  servicePerformed: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Utilização de Máquinas --------------------
+
+export type MachineOperationType =
+  | 'Preparo do solo'
+  | 'Plantio'
+  | 'Semeadura'
+  | 'Adubação'
+  | 'Pulverização'
+  | 'Colheita'
+  | 'Roçada'
+  | 'Irrigação'
+  | 'Transporte'
+  | 'Outro'
+
+export interface MachineUsageRecord {
+  id: string
+  machineId: string
+  landAreaId: string
+  cropCycleId?: string
+  operationDate: string
+  operationType: MachineOperationType
+  workedHours: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Estoque --------------------
+
+export type InventoryItemCategory =
+  | 'Ração'
+  | 'Medicamento veterinário'
+  | 'Vacina'
+  | 'Semente'
+  | 'Fertilizante'
+  | 'Defensivo agrícola'
+  | 'Combustível'
+  | 'Lubrificante'
+  | 'Peça'
+  | 'Material'
+  | 'Outro'
+
+export type InventoryItemUnit =
+  | 'kg'
+  | 'g'
+  | 'L'
+  | 'mL'
+  | 'un'
+  | 'sc'
+  | 't'
+  | 'm'
+  | 'Outro'
+
+export type InventoryItemStatus =
+  | 'Ativo'
+  | 'Inativo'
+
+export interface InventoryItem {
+  id: string
+  code: string
+  name: string
+  category: InventoryItemCategory
+  unit: InventoryItemUnit
+  currentQuantity: number
+  minimumQuantity?: number
+  location?: string
+  description?: string
+  status: InventoryItemStatus
+  batchNumber?: string
+  expirationDate?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Movimentações --------------------
+
+export type InventoryMovementType =
+  | 'Entrada'
+  | 'Saída'
+
+export type InventoryMovementOriginModule =
+  | 'health'
+  | 'crops'
+  | 'machines'
+
+export type InventoryMovementOriginType =
+  | 'vaccination'
+  | 'treatment'
+  | 'crop-management'
+  | 'machine-maintenance'
+
+export interface InventoryMovementOrigin {
+  module: InventoryMovementOriginModule
+  type: InventoryMovementOriginType
+  recordId: string
+}
+
+export interface InventoryMovement {
+  id: string
+  inventoryItemId: string
+  type: InventoryMovementType
+  movementDate: string
+  quantity: number
+  balanceBefore: number
+  balanceAfter: number
+  reason: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  origin?: InventoryMovementOrigin
+  itemCodeSnapshot?: string
+  itemNameSnapshot?: string
+  unitSnapshot?: InventoryItemUnit
+}
+
+// -------------------- Financeiro --------------------
+
+export type FinancialTransactionType =
+  | 'Receita'
+  | 'Despesa'
+
+export interface FinancialCategory {
+  id: string
+  name: string
+  type: FinancialTransactionType
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FinancialTransaction {
+  id: string
+  type: FinancialTransactionType
+  date: string
+  categoryId: string
+  description: string
+  amount: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Funcionários --------------------
+
+export type EmployeeStatus =
+  | 'Ativo'
+  | 'Inativo'
+
+export interface Employee {
+  id: string
+  name: string
+  function: string
+  phone?: string
+  email?: string
+  status: EmployeeStatus
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type AccessAccountStatus =
+  | 'Ativo'
+  | 'Inativo'
+
+export interface AccessAccount {
+  id: string
+  employeeId: string
+  email: string
+  role: UserRole
+  permissions: PermissionKey[]
+  status: AccessAccountStatus
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Agenda --------------------
+
+export type AgendaActivityType =
+  | 'Tarefa'
+  | 'Vacinação'
+  | 'Tratamento'
+  | 'Plantio'
+  | 'Colheita'
+  | 'Manutenção'
+  | 'Irrigação'
+  | 'Pagamento'
+  | 'Reposição de estoque'
+  | 'Outro'
+
+export type AgendaActivityPriority =
+  | 'Baixa'
+  | 'Média'
+  | 'Alta'
+
+export type AgendaActivityStatus =
+  | 'Pendente'
+  | 'Concluída'
+  | 'Cancelada'
+
+export interface AgendaActivity {
+  id: string
+  title: string
+  type: AgendaActivityType
+  date: string
+  time?: string
+  priority: AgendaActivityPriority
+  status: AgendaActivityStatus
+  responsibleEmployeeId?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type AgendaEntrySource =
+  | 'manual'
+  | 'health'
+  | 'crops'
+  | 'inventory'
+
+export type AgendaDisplayStatus =
+  | AgendaActivityStatus
+  | 'Atrasada'
+
+export interface AgendaEntry {
+  id: string
+  title: string
+  type:
+    | AgendaActivityType
+    | 'Validade de estoque'
+  date: string
+  time?: string
+  priority: AgendaActivityPriority
+  status: AgendaDisplayStatus
+  source: AgendaEntrySource
+  sourceLabel: string
+  sourceRecordId?: string
+  sourcePath?: string
+  responsibleEmployeeId?: string
+  responsibleName?: string
+  notes?: string
+  editable: boolean
+}
+
+// -------------------- Alertas --------------------
+
+export type AgroAlertSeverity =
+  | 'Urgente'
+  | 'Atenção'
+  | 'Informativo'
+
+export type AgroAlertSource =
+  | 'agenda'
+  | 'health'
+  | 'crops'
+  | 'inventory'
+  | 'machines'
+
+export interface AgroAlert {
+  id: string
+  title: string
+  message: string
+  severity: AgroAlertSeverity
+  source: AgroAlertSource
+  sourceLabel: string
+  date?: string
+  sourcePath?: string
+}
+
+// -------------------- Mapa --------------------
+
+export interface PropertyMapLocation {
+  latitude: number
+  longitude: number
+  updatedAt: string
+}
+
+export type SchematicShapeType =
+  | 'rectangle'
+  | 'triangle'
+  | 'trapezoid'
+  | 'l-shape'
+  | 'free'
+
+export interface MapRelativePoint {
+  x: number
+  y: number
+}
+
+export interface LandAreaMapLayout {
+  landAreaId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  shapeType?: SchematicShapeType
+  points?: MapRelativePoint[]
+}
+
+export interface GeographicPoint {
+  latitude: number
+  longitude: number
+}
+
+export interface PropertyGeographicBoundary {
+  points: GeographicPoint[]
+  updatedAt: string
+}
+
+export interface LandAreaGeographicBoundary {
+  landAreaId: string
+  points: GeographicPoint[]
+  updatedAt: string
+}
+
+export interface PropertyMapState {
+  location: PropertyMapLocation | null
+  layouts: LandAreaMapLayout[]
+}
+
+// -------------------- Intelligence 13.1 --------------------
+
+export type IntelligenceSeverity =
+  | 'critical'
+  | 'warning'
+  | 'opportunity'
+  | 'information'
+
+export type IntelligenceModule =
+  | 'animals'
+  | 'health'
+  | 'land'
+  | 'crops'
+  | 'machines'
+  | 'inventory'
+  | 'finance'
+  | 'agenda'
+  | 'map'
+
+export interface IntelligenceInsight {
+  id: string
+  title: string
+  description: string
+  severity: IntelligenceSeverity
+  module: IntelligenceModule
+  moduleLabel: string
+  explanation: string
+  sourceRecordId?: string
+  sourcePath?: string
+}
+
+export interface IntelligenceMetricSummary {
+  needsAttention: number
+  opportunities: number
+  informations: number
+  modulesAnalyzed: number
+}
+
+export interface IntelligenceDataQualityIssue {
+  id: string
+  title: string
+  description: string
+  explanation: string
+  module: IntelligenceModule
+  moduleLabel: string
+  affectedCount: number
+}
+
+export interface IntelligenceAnswerItem {
+  text: string
+  sourcePath?: string
+}
+
+export interface IntelligenceAnswer {
+  questionId: string
+  title: string
+  summary: string
+  items: IntelligenceAnswerItem[]
+  unavailable: boolean
+}
+
+export interface IntelligenceQuestion {
+  id: string
+  label: string
+}
+
+// -------------------- Chat 13.2 --------------------
+
+export type IntelligenceChatRole =
+  | 'user'
+  | 'assistant'
+
+export interface IntelligenceChatMessage {
+  id: string
+  role: IntelligenceChatRole
+  content: string
+  createdAt: string
+}
+
+// -------------------- Ações assistidas 13.2 --------------------
+
+export type IntelligenceActionType =
+  | 'create_land_area'
+  | 'create_animal'
+  | 'create_agenda_activity'
+  | 'create_financial_transaction'
+  | 'create_inventory_movement'
+  | 'create_crop_cycle'
+  | 'update_machine_status'
+
+export interface CreateLandAreaActionData {
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  purpose?: string | null
+  status: LandAreaStatus
+  description?: string | null
+}
+
+export interface CreateAnimalActionData {
+  identification: string
+  name?: string | null
+  species: AnimalSpecies
+  breed: string
+  sex: AnimalSex
+  birthDate?: string | null
+  category: AnimalCategory
+  status: AnimalStatus
+  lotId?: string | null
+  currentWeight?: number | null
+  origin?: string | null
+  notes?: string | null
+}
+
+export interface CreateAgendaActivityActionData {
+  title: string
+  type: AgendaActivityType
+  date: string
+  time?: string | null
+  priority: AgendaActivityPriority
+  status: AgendaActivityStatus
+  responsibleEmployeeId?: string | null
+  notes?: string | null
+}
+
+export interface CreateFinancialTransactionActionData {
+  type: FinancialTransactionType
+  date: string
+  categoryId: string
+  description: string
+  amount: number
+  notes?: string | null
+}
+
+export interface CreateInventoryMovementActionData {
+  inventoryItemId: string
+  type: InventoryMovementType
+  movementDate: string
+  quantity: number
+  reason: string
+  responsible?: string | null
+  notes?: string | null
+}
+
+export interface CreateCropCycleActionData {
+  landAreaId: string
+  crop: string
+  cultivar?: string | null
+  season: string
+  status: CropCycleStatus
+  plantingDate?: string | null
+  expectedHarvestDate?: string | null
+  notes?: string | null
+}
+
+export interface UpdateMachineStatusActionData {
+  machineCode: string
+  newStatus: MachineStatus
+}
+
+export type IntelligenceActionProposal =
+  | {
+      type: 'create_land_area'
+      data: CreateLandAreaActionData
+    }
+  | {
+      type: 'create_animal'
+      data: CreateAnimalActionData
+    }
+  | {
+      type: 'create_agenda_activity'
+      data: CreateAgendaActivityActionData
+    }
+  | {
+      type: 'create_financial_transaction'
+      data: CreateFinancialTransactionActionData
+    }
+  | {
+      type: 'create_inventory_movement'
+      data: CreateInventoryMovementActionData
+    }
+  | {
+      type: 'create_crop_cycle'
+      data: CreateCropCycleActionData
+    }
+  | {
+      type: 'update_machine_status'
+      data: UpdateMachineStatusActionData
+    }
+
+export interface IntelligenceActionCapabilities {
+  canCreateLandArea: boolean
+  canCreateAnimal: boolean
+  canCreateAgendaActivity: boolean
+  canCreateFinancialTransaction: boolean
+  canCreateInventoryMovement: boolean
+  canCreateCropCycle: boolean
+  canUpdateMachineStatus: boolean
+}
+
+// -------------------- Contexto enviado à IA --------------------
+
+export interface IntelligenceContextMetadata {
+  generatedAt: string
+  capabilities: IntelligenceActionCapabilities
+}
+
+export interface IntelligenceContextList<T> {
+  total: number
+  truncated: boolean
+  items: T[]
+}
+
+export interface IntelligenceContextAnimals {
+  total: number
+  active: number
+  bySpecies?: Record<string, number>
+  byStatus?: Record<string, number>
+}
+
+export interface IntelligenceContextHealthEntry {
+  description: string
+  animalLabel?: string
+}
+
+export interface IntelligenceContextHealth {
+  overdueVaccinations:
+    IntelligenceContextList<IntelligenceContextHealthEntry>
+  upcomingVaccinations:
+    IntelligenceContextList<IntelligenceContextHealthEntry>
+  ongoingTreatments:
+    IntelligenceContextList<IntelligenceContextHealthEntry>
+  openOccurrences:
+    IntelligenceContextList<IntelligenceContextHealthEntry>
+}
+
+export interface IntelligenceContextInventoryItem {
+  code: string
+  name: string
+  quantity: number
+  unit: string
+  minimum?: number
+}
+
+export interface IntelligenceContextInventoryItemOption {
+  id: string
+  code: string
+  name: string
+  unit: string
+  currentQuantity: number
+}
+
+export interface IntelligenceContextInventory {
+  activeItems: number
+  zeroedItems:
+    IntelligenceContextList<IntelligenceContextInventoryItem>
+  belowMinimumItems:
+    IntelligenceContextList<IntelligenceContextInventoryItem>
+  expiringItems:
+    IntelligenceContextList<IntelligenceContextInventoryItem>
+  itemsLimited:
+    IntelligenceContextList<IntelligenceContextInventoryItemOption>
+}
+
+export interface IntelligenceContextFinanceCategory {
+  label: string
+  amount: number
+}
+
+export interface IntelligenceContextFinanceCategoryOption {
+  id: string
+  name: string
+  type: FinancialTransactionType
+}
+
+export interface IntelligenceContextFinance {
+  totalRevenues: number
+  totalExpenses: number
+  balance: number
+  topExpenseCategories:
+    IntelligenceContextList<IntelligenceContextFinanceCategory>
+  categoriesLimited:
+    IntelligenceContextList<IntelligenceContextFinanceCategoryOption>
+}
+
+export interface IntelligenceContextLandLandAreaOption {
+  id: string
+  code: string
+  name: string
+}
+
+export interface IntelligenceContextLand {
+  totalAreas: number
+  byStatus: Record<string, number>
+  occupiedPaddocks: number
+  areasLimited:
+    IntelligenceContextList<IntelligenceContextLandLandAreaOption>
+}
+
+export interface IntelligenceContextMapLandArea {
+  code: string
+  name: string
+  cadastradaHa: number
+  demarcadaHa: number
+  diffHa: number
+}
+
+export interface IntelligenceContextMap {
+  propertyAreaHa: number | null
+  propertyAreaM2: number | null
+  demarcatedAreas:
+    IntelligenceContextList<IntelligenceContextMapLandArea>
+}
+
+export interface IntelligenceContextCrops {
+  activeCycles: number
+  plannedCycles: number
+  upcomingHarvests:
+    IntelligenceContextList<string>
+  overdueHarvests:
+    IntelligenceContextList<string>
+}
+
+export interface IntelligenceContextMachineOption {
+  code: string
+  name: string
+  status: MachineStatus
+}
+
+export interface IntelligenceContextMachines {
+  total: number
+  operational: number
+  maintenance: number
+  inactive: number
+  maintenanceMachines:
+    IntelligenceContextList<IntelligenceContextMachineOption>
+  machinesList:
+    IntelligenceContextList<IntelligenceContextMachineOption>
+}
+
+export interface IntelligenceContextAgenda {
+  overdue:
+    IntelligenceContextList<string>
+  highPriorityPending:
+    IntelligenceContextList<string>
+}
+
+export interface IntelligenceContext {
+  metadata: IntelligenceContextMetadata
+  animals?: IntelligenceContextAnimals
+  health?: IntelligenceContextHealth
+  land?: IntelligenceContextLand
+  crops?: IntelligenceContextCrops
+  machines?: IntelligenceContextMachines
+  inventory?: IntelligenceContextInventory
+  finance?: IntelligenceContextFinance
+  agenda?: IntelligenceContextAgenda
+  map?: IntelligenceContextMap
+}
+
+========================================================================
+ARQUIVO: src/services/permissionService.ts
+========================================================================
+
+import { PermissionKey, User } from '../types'
+
+export interface PermissionOption {
+  key: PermissionKey
+  label: string
+}
+
+export const PERMISSION_OPTIONS: PermissionOption[] = [
+  { key: 'animals', label: 'Animais' },
+  { key: 'health', label: 'Saúde Animal' },
+  { key: 'land', label: 'Terras' },
+  { key: 'crops', label: 'Cultivos' },
+  { key: 'machines', label: 'Máquinas' },
+  { key: 'inventory', label: 'Estoque' },
+  { key: 'finance', label: 'Financeiro' },
+  { key: 'property', label: 'Propriedade' },
+  { key: 'agenda', label: 'Agenda e alertas' },
+  { key: 'reports', label: 'Relatórios' },
+  { key: 'map', label: 'Mapa' },
+  { key: 'intelligence', label: 'Agro360 Intelligence' },
+]
+
+export const VALID_PERMISSION_KEYS: PermissionKey[] =
+  PERMISSION_OPTIONS.map(option => option.key)
+
+export function isPermissionKey(value: unknown): value is PermissionKey {
+  return (
+    typeof value === 'string' &&
+    VALID_PERMISSION_KEYS.includes(value as PermissionKey)
+  )
+}
+
+export function getPermissionLabel(permission: PermissionKey): string {
+  const option = PERMISSION_OPTIONS.find(item => item.key === permission)
+  return option?.label ?? permission
+}
+
+export function isAdmin(user: User | null): boolean {
+  return user?.role === 'admin'
+}
+
+export function userHasPermission(
+  user: User | null,
+  permission: PermissionKey,
+): boolean {
+  if (!user) return false
+  if (user.role === 'admin') return true
+  return (user.permissions ?? []).includes(permission)
+}
+
+========================================================================
+ARQUIVO: src/hooks/useAuth.ts
+========================================================================
+
+import { useContext } from 'react'
+import { AuthContext } from '../contexts/AuthContext'
+
+export function useAuth() {
+  return useContext(AuthContext)
+}
+
+========================================================================
+ARQUIVO: src/contexts/AuthContext.tsx
+========================================================================
+
+import {
+  createContext,
+  useState,
+  useCallback,
+  ReactNode,
+} from 'react'
+import { User } from '../types'
+import * as authService from '../services/authService'
+
+interface AuthContextType {
+  user: User | null
+  isAuthenticated: boolean
+  login: (
+    email: string,
+    password: string,
+    remember: boolean,
+  ) => Promise<void>
+  logout: () => void
+  refreshUser: () => void
+}
+
+export const AuthContext = createContext<AuthContextType>(
+  {} as AuthContextType,
+)
+
+const STORAGE_KEY = 'agro360_user'
+
+function readStoredCandidate(): unknown {
+  const local = localStorage.getItem(STORAGE_KEY)
+  if (local) {
+    try {
+      return JSON.parse(local) as unknown
+    } catch {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  }
+
+  const session = sessionStorage.getItem(STORAGE_KEY)
+  if (session) {
+    try {
+      return JSON.parse(session) as unknown
+    } catch {
+      sessionStorage.removeItem(STORAGE_KEY)
+    }
+  }
+
+  return null
+}
+
+function getStoredUser(): User | null {
+  const candidate = readStoredCandidate()
+
+  if (candidate === null) return null
+
+  const restored = authService.restoreSessionUser(candidate)
+
+  if (!restored) {
+    localStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(STORAGE_KEY)
+    return null
+  }
+
+  return restored
+}
+
+function persistUser(user: User, remember: boolean): void {
+  if (remember) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(user))
+    sessionStorage.removeItem(STORAGE_KEY)
+  } else {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user))
+    localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
+export function AuthProvider({
+  children,
+}: {
+  children: ReactNode
+}) {
+  const [user, setUser] = useState<User | null>(
+    () => getStoredUser(),
+  )
+
+  const isAuthenticated = !!user
+
+  const login = async (
+    email: string,
+    password: string,
+    remember: boolean,
+  ) => {
+    const { user: loggedUser } = await authService.login(
+      email,
+      password,
+    )
+
+    persistUser(loggedUser, remember)
+
+    setUser(loggedUser)
+  }
+
+  const logout = () => {
+    localStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(STORAGE_KEY)
+
+    setUser(null)
+  }
+
+  const refreshUser = useCallback(() => {
+    const candidate = readStoredCandidate()
+
+    if (candidate === null) {
+      setUser(null)
+      return
+    }
+
+    const restored = authService.restoreSessionUser(candidate)
+
+    if (!restored) {
+      localStorage.removeItem(STORAGE_KEY)
+      sessionStorage.removeItem(STORAGE_KEY)
+      setUser(null)
+      return
+    }
+
+    // Atualiza o storage onde a sessão estava
+    const inLocal = localStorage.getItem(STORAGE_KEY) !== null
+    const inSession = sessionStorage.getItem(STORAGE_KEY) !== null
+
+    if (inLocal) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(restored))
+    }
+
+    if (inSession) {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(restored))
+    }
+
+    setUser(restored)
+  }, [])
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated,
+        login,
+        logout,
+        refreshUser,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+========================================================================
+ARQUIVO: src/contexts/ThemeContext.tsx
+========================================================================
+
+import {
+  createContext,
+  useState,
+  ReactNode,
+  useEffect,
+} from 'react'
+
+interface ThemeContextType {
+  theme: 'light' | 'dark'
+  toggleTheme: () => void
+}
+
+export const ThemeContext = createContext<ThemeContextType>(
+  {} as ThemeContextType,
+)
+
+const STORAGE_KEY = 'agro360_theme'
+
+export function ThemeProvider({
+  children,
+}: {
+  children: ReactNode
+}) {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+
+    if (stored === 'dark' || stored === 'light') {
+      return stored
+    }
+
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark'
+      : 'light'
+  })
+
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      'dark',
+      theme === 'dark',
+    )
+
+    localStorage.setItem(STORAGE_KEY, theme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme(prev =>
+      prev === 'light' ? 'dark' : 'light',
+    )
+  }
+
+  return (
+    <ThemeContext.Provider
+      value={{
+        theme,
+        toggleTheme,
+      }}
+    >
+      {children}
+    </ThemeContext.Provider>
+  )
+}
+
+========================================================================
+ARQUIVO: src/services/inventoryIntegrationService.ts
+========================================================================
+
+import {
+  CropManagement,
+  InventoryMovement,
+  MachineMaintenanceRecord,
+  Treatment,
+  Vaccination,
+} from '../types'
+import {
+  createVaccination,
+  deleteVaccination,
+  createTreatment,
+  deleteTreatment,
+} from './healthService'
+import {
+  createCropManagement,
+  deleteCropManagement,
+} from './cropManagementService'
+import {
+  createMachineMaintenanceRecord,
+  deleteMachineMaintenanceRecord,
+} from './machineMaintenanceService'
+import {
+  createInventoryMovement,
+  createInventoryMovementsBatch,
+  validateIntegratedMovementsBatch,
+  validateVaccinationStockConsumption,
+} from './inventoryService'
+
+export interface VaccinationConsumptionInput {
+  inventoryItemId: string
+  quantity: number
+}
+
+export interface ConsumptionLineInput {
+  inventoryItemId: string
+  quantity: number
+}
+
+export interface CreateVaccinationWithConsumptionResult {
+  vaccination: Vaccination
+  movement: InventoryMovement
+}
+
+export interface CreateTreatmentWithConsumptionResult {
+  treatment: Treatment
+  movements: InventoryMovement[]
+}
+
+export interface CreateCropManagementWithConsumptionResult {
+  management: CropManagement
+  movements: InventoryMovement[]
+}
+
+export interface CreateMachineMaintenanceWithConsumptionResult {
+  record: MachineMaintenanceRecord
+  movements: InventoryMovement[]
+}
+
+// -------------------- Vacinação --------------------
+
+export function createVaccinationWithConsumption(
+  vaccinationData: Omit<Vaccination, 'id' | 'createdAt' | 'updatedAt'>,
+  consumption: VaccinationConsumptionInput
+): CreateVaccinationWithConsumptionResult {
+  validateVaccinationStockConsumption(
+    consumption.inventoryItemId,
+    consumption.quantity,
+    vaccinationData.applicationDate,
+    vaccinationData.responsible
+  )
+
+  const vaccination = createVaccination(vaccinationData)
+
+  let movement: InventoryMovement
+
+  try {
+    movement = createInventoryMovement({
+      inventoryItemId: consumption.inventoryItemId,
+      type: 'Saída',
+      movementDate: vaccination.applicationDate,
+      quantity: consumption.quantity,
+      reason: 'Baixa por vacinação',
+      responsible: vaccination.responsible,
+      notes: undefined,
+      origin: {
+        module: 'health',
+        type: 'vaccination',
+        recordId: vaccination.id,
+      },
+    })
+  } catch (movementError) {
+    let rolledBack = false
+    let rollbackError: unknown = null
+
+    try {
+      rolledBack = deleteVaccination(vaccination.id)
+    } catch (error) {
+      rollbackError = error
+    }
+
+    if (rollbackError !== null) {
+      throw new Error(
+        'Falha parcial: a movimentação de estoque não pôde ser registrada e o rollback da vacinação também falhou. Verifique o estoque e a vacinação manualmente.'
+      )
+    }
+
+    if (!rolledBack) {
+      throw new Error(
+        'Falha parcial: a movimentação de estoque não pôde ser registrada e o rollback da vacinação não removeu o registro. Verifique o estoque e a vacinação manualmente.'
+      )
+    }
+
+    throw movementError
+  }
+
+  return { vaccination, movement }
+}
+
+// -------------------- Tratamento --------------------
+
+export function createTreatmentWithConsumption(
+  treatmentData: Omit<Treatment, 'id' | 'createdAt' | 'updatedAt'>,
+  consumptions: ConsumptionLineInput[]
+): CreateTreatmentWithConsumptionResult {
+  if (consumptions.length === 0) {
+    throw new Error('Informe ao menos um item para baixa.')
+  }
+
+  validateIntegratedMovementsBatch(
+    consumptions,
+    treatmentData.startDate,
+    {
+      module: 'health',
+      type: 'treatment',
+      recordId: '__pre__',
+    },
+    treatmentData.responsible,
+    'Baixa por tratamento'
+  )
+
+  const treatment =
+    createTreatment(treatmentData)
+
+  let movements: InventoryMovement[]
+
+  try {
+    movements =
+      createInventoryMovementsBatch(
+        consumptions.map(line => ({
+          inventoryItemId:
+            line.inventoryItemId,
+          type: 'Saída' as const,
+          movementDate:
+            treatment.startDate,
+          quantity:
+            line.quantity,
+          reason:
+            'Baixa por tratamento',
+          responsible:
+            treatment.responsible,
+          notes: undefined,
+          origin: {
+            module:
+              'health' as const,
+            type:
+              'treatment' as const,
+            recordId:
+              treatment.id,
+          },
+        }))
+      )
+  } catch (movementError) {
+    let rolledBack = false
+    let rollbackError: unknown = null
+
+    try {
+      rolledBack =
+        deleteTreatment(
+          treatment.id
+        )
+    } catch (error) {
+      rollbackError = error
+    }
+
+    if (
+      rollbackError !== null
+    ) {
+      throw new Error(
+        'Falha parcial: as movimentações de estoque não puderam ser registradas e o rollback do tratamento também falhou. Verifique o estoque e o tratamento manualmente.'
+      )
+    }
+
+    if (!rolledBack) {
+      throw new Error(
+        'Falha parcial: as movimentações de estoque não puderam ser registradas e o rollback do tratamento não removeu o registro. Verifique o estoque e o tratamento manualmente.'
+      )
+    }
+
+    throw movementError
+  }
+
+  return {
+    treatment,
+    movements,
+  }
+}
+
+// -------------------- Manejo agrícola --------------------
+
+export function createCropManagementWithConsumption(
+  managementData: Omit<CropManagement, 'id' | 'createdAt' | 'updatedAt'>,
+  consumptions: ConsumptionLineInput[]
+): CreateCropManagementWithConsumptionResult {
+  if (consumptions.length === 0) {
+    throw new Error('Informe ao menos um item para baixa.')
+  }
+
+  validateIntegratedMovementsBatch(
+    consumptions,
+    managementData.date,
+    {
+      module: 'crops',
+      type: 'crop-management',
+      recordId: '__pre__',
+    },
+    managementData.responsible,
+    'Baixa por manejo agrícola'
+  )
+
+  const management =
+    createCropManagement(
+      managementData
+    )
+
+  let movements: InventoryMovement[]
+
+  try {
+    movements =
+      createInventoryMovementsBatch(
+        consumptions.map(line => ({
+          inventoryItemId:
+            line.inventoryItemId,
+          type: 'Saída' as const,
+          movementDate:
+            management.date,
+          quantity:
+            line.quantity,
+          reason:
+            'Baixa por manejo agrícola',
+          responsible:
+            management.responsible,
+          notes: undefined,
+          origin: {
+            module:
+              'crops' as const,
+            type:
+              'crop-management' as const,
+            recordId:
+              management.id,
+          },
+        }))
+      )
+  } catch (movementError) {
+    let rolledBack = false
+    let rollbackError: unknown = null
+
+    try {
+      rolledBack =
+        deleteCropManagement(
+          management.id
+        )
+    } catch (error) {
+      rollbackError = error
+    }
+
+    if (
+      rollbackError !== null
+    ) {
+      throw new Error(
+        'Falha parcial: as movimentações de estoque não puderam ser registradas e o rollback do manejo também falhou. Verifique o estoque e o manejo manualmente.'
+      )
+    }
+
+    if (!rolledBack) {
+      throw new Error(
+        'Falha parcial: as movimentações de estoque não puderam ser registradas e o rollback do manejo não removeu o registro. Verifique o estoque e o manejo manualmente.'
+      )
+    }
+
+    throw movementError
+  }
+
+  return {
+    management,
+    movements,
+  }
+}
+
+// -------------------- Manutenção de máquina --------------------
+
+export function createMachineMaintenanceWithConsumption(
+  maintenanceData: Omit<
+    MachineMaintenanceRecord,
+    'id' | 'createdAt' | 'updatedAt'
+  >,
+  consumptions: ConsumptionLineInput[]
+): CreateMachineMaintenanceWithConsumptionResult {
+  if (consumptions.length === 0) {
+    throw new Error('Informe ao menos um item para baixa.')
+  }
+
+  validateIntegratedMovementsBatch(
+    consumptions,
+    maintenanceData.maintenanceDate,
+    {
+      module: 'machines',
+      type: 'machine-maintenance',
+      recordId: '__pre__',
+    },
+    maintenanceData.responsible,
+    'Baixa por manutenção de máquina'
+  )
+
+  const record =
+    createMachineMaintenanceRecord(
+      maintenanceData
+    )
+
+  let movements: InventoryMovement[]
+
+  try {
+    movements =
+      createInventoryMovementsBatch(
+        consumptions.map(line => ({
+          inventoryItemId:
+            line.inventoryItemId,
+          type: 'Saída' as const,
+          movementDate:
+            record.maintenanceDate,
+          quantity:
+            line.quantity,
+          reason:
+            'Baixa por manutenção de máquina',
+          responsible:
+            record.responsible,
+          notes: undefined,
+          origin: {
+            module:
+              'machines' as const,
+            type:
+              'machine-maintenance' as const,
+            recordId:
+              record.id,
+          },
+        }))
+      )
+  } catch (movementError) {
+    let rolledBack = false
+    let rollbackError: unknown = null
+
+    try {
+      rolledBack =
+        deleteMachineMaintenanceRecord(
+          record.id
+        )
+    } catch (error) {
+      rollbackError = error
+    }
+
+    if (
+      rollbackError !== null
+    ) {
+      throw new Error(
+        'Falha parcial: as movimentações de estoque não puderam ser registradas e o rollback da manutenção também falhou. Verifique o estoque e a manutenção manualmente.'
+      )
+    }
+
+    if (!rolledBack) {
+      throw new Error(
+        'Falha parcial: as movimentações de estoque não puderam ser registradas e o rollback da manutenção não removeu o registro. Verifique o estoque e a manutenção manualmente.'
+      )
+    }
+
+    throw movementError
+  }
+
+  return {
+    record,
+    movements,
+  }
+}
+
+========================================================================
+ARQUIVO: src/services/healthService.ts
+========================================================================
+
+import {
+  Vaccination,
+  Treatment,
+  HealthOccurrence,
+  VaccinationStatus,
+} from '../types'
+import {
+  getStorageItem,
+  setStorageItem,
+  generateId,
+} from './storage'
+import { hasInventoryMovementByOrigin } from './inventoryService'
+
+const VACCINATIONS_KEY =
+  'agro360_vaccinations'
+
+const TREATMENTS_KEY =
+  'agro360_treatments'
+
+const OCCURRENCES_KEY =
+  'agro360_health_occurrences'
+
+const INITIALIZED_KEY =
+  'agro360_health_initialized'
+
+const ANIMALS_KEY =
+  'agro360_animals'
+
+function initializeHealthIfNeeded(): void {
+  const initialized =
+    getStorageItem<boolean>(
+      INITIALIZED_KEY,
+      false,
+    )
+
+  if (!initialized) {
+    setStorageItem(
+      VACCINATIONS_KEY,
+      [],
+    )
+
+    setStorageItem(
+      TREATMENTS_KEY,
+      [],
+    )
+
+    setStorageItem(
+      OCCURRENCES_KEY,
+      [],
+    )
+
+    setStorageItem(
+      INITIALIZED_KEY,
+      true,
+    )
+  }
+}
+
+function assertAnimalExists(
+  animalId: string,
+): void {
+  const animals =
+    getStorageItem<
+      { id: string }[]
+    >(
+      ANIMALS_KEY,
+      [],
+    )
+
+  const exists = animals.some(
+    animal =>
+      animal.id === animalId,
+  )
+
+  if (!exists) {
+    throw new Error(
+      'Animal não encontrado.',
+    )
+  }
+}
+
+function vaccinationHasStockConsumption(
+  vaccinationId: string,
+): boolean {
+  return hasInventoryMovementByOrigin(
+    'health',
+    'vaccination',
+    vaccinationId,
+  )
+}
+
+function treatmentHasStockConsumption(
+  treatmentId: string,
+): boolean {
+  return hasInventoryMovementByOrigin(
+    'health',
+    'treatment',
+    treatmentId,
+  )
+}
+
+// VACINAÇÕES
+
+export function getVaccinations(): Vaccination[] {
+  initializeHealthIfNeeded()
+
+  return getStorageItem<
+    Vaccination[]
+  >(
+    VACCINATIONS_KEY,
+    [],
+  )
+}
+
+export function getVaccinationById(
+  id: string,
+): Vaccination | undefined {
+  return getVaccinations().find(
+    vaccination =>
+      vaccination.id === id,
+  )
+}
+
+export function createVaccination(
+  data: Omit<
+    Vaccination,
+    'id' | 'createdAt' | 'updatedAt'
+  >,
+): Vaccination {
+  assertAnimalExists(data.animalId)
+
+  const vaccinations =
+    getVaccinations()
+
+  const now =
+    new Date().toISOString()
+
+  const newVaccination: Vaccination =
+    {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    }
+
+  vaccinations.push(
+    newVaccination,
+  )
+
+  setStorageItem(
+    VACCINATIONS_KEY,
+    vaccinations,
+  )
+
+  return newVaccination
+}
+
+export function updateVaccination(
+  id: string,
+  data: Partial<Vaccination>,
+): Vaccination | undefined {
+  if (
+    data.animalId !== undefined
+  ) {
+    assertAnimalExists(
+      data.animalId,
+    )
+  }
+
+  const vaccinations =
+    getVaccinations()
+
+  const index =
+    vaccinations.findIndex(
+      vaccination =>
+        vaccination.id === id,
+    )
+
+  if (index === -1) {
+    return undefined
+  }
+
+  const current = vaccinations[index]
+
+  if (vaccinationHasStockConsumption(id)) {
+    const protectedFieldsChanged =
+      ('animalId' in data &&
+        data.animalId !== current.animalId) ||
+      ('vaccineName' in data &&
+        data.vaccineName !== current.vaccineName) ||
+      ('applicationDate' in data &&
+        data.applicationDate !== current.applicationDate) ||
+      ('dose' in data &&
+        data.dose !== current.dose) ||
+      ('batch' in data &&
+        data.batch !== current.batch)
+
+    if (protectedFieldsChanged) {
+      throw new Error(
+        'Não é possível alterar os dados principais desta vacinação porque ela possui baixa de estoque registrada.',
+      )
+    }
+  }
+
+  const updated: Vaccination = {
+    ...current,
+    ...data,
+    id: current.id,
+    createdAt: current.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  vaccinations[index] = updated
+
+  setStorageItem(
+    VACCINATIONS_KEY,
+    vaccinations,
+  )
+
+  return updated
+}
+
+export function deleteVaccination(
+  id: string,
+): boolean {
+  if (vaccinationHasStockConsumption(id)) {
+    throw new Error(
+      'Não é possível excluir esta vacinação porque ela possui baixa de estoque registrada.',
+    )
+  }
+
+  const vaccinations =
+    getVaccinations()
+
+  const filtered =
+    vaccinations.filter(
+      vaccination =>
+        vaccination.id !== id,
+    )
+
+  if (
+    filtered.length ===
+    vaccinations.length
+  ) {
+    return false
+  }
+
+  setStorageItem(
+    VACCINATIONS_KEY,
+    filtered,
+  )
+
+  return true
+}
+
+export function getVaccinationsByAnimal(
+  animalId: string,
+): Vaccination[] {
+  return getVaccinations()
+    .filter(
+      vaccination =>
+        vaccination.animalId ===
+        animalId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(
+          b.applicationDate,
+        ).getTime() -
+        new Date(
+          a.applicationDate,
+        ).getTime(),
+    )
+}
+
+export function animalHasVaccinationWithStockConsumption(
+  animalId: string,
+): boolean {
+  const vaccinations =
+    getVaccinationsByAnimal(animalId)
+
+  return vaccinations.some(
+    vaccination =>
+      vaccinationHasStockConsumption(
+        vaccination.id,
+      ),
+  )
+}
+
+export function getVaccinationStatus(
+  vaccination: Vaccination,
+): VaccinationStatus {
+  if (!vaccination.nextDoseDate) {
+    return 'Sem próxima dose'
+  }
+
+  const today = new Date()
+
+  today.setHours(
+    0,
+    0,
+    0,
+    0,
+  )
+
+  const nextDose = new Date(
+    vaccination.nextDoseDate +
+      'T00:00:00',
+  )
+
+  const diffDays = Math.ceil(
+    (
+      nextDose.getTime() -
+      today.getTime()
+    ) /
+      (
+        1000 *
+        60 *
+        60 *
+        24
+      ),
+  )
+
+  if (diffDays < 0) {
+    return 'Vencida'
+  }
+
+  if (diffDays <= 7) {
+    return 'Próxima'
+  }
+
+  return 'Em dia'
+}
+
+// TRATAMENTOS
+
+export function getTreatments(): Treatment[] {
+  initializeHealthIfNeeded()
+
+  return getStorageItem<
+    Treatment[]
+  >(
+    TREATMENTS_KEY,
+    [],
+  )
+}
+
+export function getTreatmentById(
+  id: string,
+): Treatment | undefined {
+  return getTreatments().find(
+    treatment =>
+      treatment.id === id,
+  )
+}
+
+export function createTreatment(
+  data: Omit<
+    Treatment,
+    'id' | 'createdAt' | 'updatedAt'
+  >,
+): Treatment {
+  assertAnimalExists(data.animalId)
+
+  const treatments =
+    getTreatments()
+
+  const now =
+    new Date().toISOString()
+
+  const newTreatment: Treatment = {
+    ...data,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  treatments.push(newTreatment)
+
+  setStorageItem(
+    TREATMENTS_KEY,
+    treatments,
+  )
+
+  return newTreatment
+}
+
+export function updateTreatment(
+  id: string,
+  data: Partial<Treatment>,
+): Treatment | undefined {
+  if (
+    data.animalId !== undefined
+  ) {
+    assertAnimalExists(
+      data.animalId,
+    )
+  }
+
+  const treatments =
+    getTreatments()
+
+  const index =
+    treatments.findIndex(
+      treatment =>
+        treatment.id === id,
+    )
+
+  if (index === -1) {
+    return undefined
+  }
+
+  const current = treatments[index]
+
+  // Proteção: se há baixa de estoque vinculada, campos principais não podem mudar.
+  // Usamos `in` para detectar presença real de propriedades opcionais,
+  // cobrindo chamadas como { medication: undefined }.
+  if (treatmentHasStockConsumption(id)) {
+    const protectedFieldsChanged =
+      ('animalId' in data &&
+        data.animalId !== current.animalId) ||
+      ('reason' in data &&
+        data.reason !== current.reason) ||
+      ('medication' in data &&
+        data.medication !== current.medication) ||
+      ('dosage' in data &&
+        data.dosage !== current.dosage) ||
+      ('startDate' in data &&
+        data.startDate !== current.startDate)
+
+    if (protectedFieldsChanged) {
+      throw new Error(
+        'Não é possível alterar os dados principais deste tratamento porque ele possui baixa de estoque registrada.',
+      )
+    }
+  }
+
+  const updated: Treatment = {
+    ...current,
+    ...data,
+    id: current.id,
+    createdAt: current.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  treatments[index] = updated
+
+  setStorageItem(
+    TREATMENTS_KEY,
+    treatments,
+  )
+
+  return updated
+}
+
+export function deleteTreatment(
+  id: string,
+): boolean {
+  if (treatmentHasStockConsumption(id)) {
+    throw new Error(
+      'Não é possível excluir este tratamento porque ele possui baixa de estoque registrada.',
+    )
+  }
+
+  const treatments =
+    getTreatments()
+
+  const filtered =
+    treatments.filter(
+      treatment =>
+        treatment.id !== id,
+    )
+
+  if (
+    filtered.length ===
+    treatments.length
+  ) {
+    return false
+  }
+
+  setStorageItem(
+    TREATMENTS_KEY,
+    filtered,
+  )
+
+  return true
+}
+
+export function getTreatmentsByAnimal(
+  animalId: string,
+): Treatment[] {
+  return getTreatments()
+    .filter(
+      treatment =>
+        treatment.animalId ===
+        animalId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(
+          b.startDate,
+        ).getTime() -
+        new Date(
+          a.startDate,
+        ).getTime(),
+    )
+}
+
+export function animalHasTreatmentWithStockConsumption(
+  animalId: string,
+): boolean {
+  const treatments =
+    getTreatmentsByAnimal(animalId)
+
+  return treatments.some(
+    treatment =>
+      treatmentHasStockConsumption(
+        treatment.id,
+      ),
+  )
+}
+
+// OCORRÊNCIAS
+
+export function getHealthOccurrences(): HealthOccurrence[] {
+  initializeHealthIfNeeded()
+
+  return getStorageItem<
+    HealthOccurrence[]
+  >(
+    OCCURRENCES_KEY,
+    [],
+  )
+}
+
+export function getHealthOccurrenceById(
+  id: string,
+): HealthOccurrence | undefined {
+  return getHealthOccurrences().find(
+    occurrence =>
+      occurrence.id === id,
+  )
+}
+
+export function createHealthOccurrence(
+  data: Omit<
+    HealthOccurrence,
+    'id' | 'createdAt' | 'updatedAt'
+  >,
+): HealthOccurrence {
+  assertAnimalExists(data.animalId)
+
+  const occurrences =
+    getHealthOccurrences()
+
+  const now =
+    new Date().toISOString()
+
+  const newOccurrence:
+    HealthOccurrence = {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    }
+
+  occurrences.push(
+    newOccurrence,
+  )
+
+  setStorageItem(
+    OCCURRENCES_KEY,
+    occurrences,
+  )
+
+  return newOccurrence
+}
+
+export function updateHealthOccurrence(
+  id: string,
+  data: Partial<HealthOccurrence>,
+): HealthOccurrence | undefined {
+  if (
+    data.animalId !== undefined
+  ) {
+    assertAnimalExists(
+      data.animalId,
+    )
+  }
+
+  const occurrences =
+    getHealthOccurrences()
+
+  const index =
+    occurrences.findIndex(
+      occurrence =>
+        occurrence.id === id,
+    )
+
+  if (index === -1) {
+    return undefined
+  }
+
+  const updated:
+    HealthOccurrence = {
+      ...occurrences[index],
+      ...data,
+      id: occurrences[index].id,
+      createdAt:
+        occurrences[index]
+          .createdAt,
+      updatedAt:
+        new Date().toISOString(),
+    }
+
+  occurrences[index] = updated
+
+  setStorageItem(
+    OCCURRENCES_KEY,
+    occurrences,
+  )
+
+  return updated
+}
+
+export function deleteHealthOccurrence(
+  id: string,
+): boolean {
+  const occurrences =
+    getHealthOccurrences()
+
+  const filtered =
+    occurrences.filter(
+      occurrence =>
+        occurrence.id !== id,
+    )
+
+  if (
+    filtered.length ===
+    occurrences.length
+  ) {
+    return false
+  }
+
+  setStorageItem(
+    OCCURRENCES_KEY,
+    filtered,
+  )
+
+  return true
+}
+
+export function getHealthOccurrencesByAnimal(
+  animalId: string,
+): HealthOccurrence[] {
+  return getHealthOccurrences()
+    .filter(
+      occurrence =>
+        occurrence.animalId ===
+        animalId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(
+          b.date,
+        ).getTime() -
+        new Date(
+          a.date,
+        ).getTime(),
+    )
+}
+
+export function getPendingVaccinationCount(): number {
+  const vaccinations =
+    getVaccinations()
+
+  return vaccinations.filter(
+    vaccination => {
+      const status =
+        getVaccinationStatus(
+          vaccination,
+        )
+
+      return (
+        status === 'Próxima' ||
+        status === 'Vencida'
+      )
+    },
+  ).length
+}
+
+========================================================================
+ARQUIVO: src/services/cropManagementService.ts
+========================================================================
+
+import {
+  CropManagement,
+  CropManagementType,
+} from '../types'
+import { getStorageItem, setStorageItem, generateId } from './storage'
+import {
+  getCropCycleById,
+  getCropCyclesByLandAreaId,
+} from './cropService'
+import { hasInventoryMovementByOrigin } from './inventoryService'
+
+const CROP_MANAGEMENTS_KEY = 'agro360_crop_managements'
+const INITIALIZED_KEY = 'agro360_crop_managements_initialized'
+
+const CROP_MANAGEMENT_TYPES: CropManagementType[] = [
+  'Adubação',
+  'Irrigação',
+  'Pulverização',
+  'Capina',
+  'Controle de plantas daninhas',
+  'Controle de pragas',
+  'Controle de doenças',
+  'Manejo cultural',
+  'Outro',
+]
+
+type CropManagementInput = Omit<
+  CropManagement,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+function initializeCropManagementsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(INITIALIZED_KEY, false)
+
+  if (!initialized) {
+    setStorageItem(CROP_MANAGEMENTS_KEY, [])
+    setStorageItem(INITIALIZED_KEY, true)
+  }
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  if (value === undefined) return true
+  return typeof value === 'string'
+}
+
+function isValidCivilDate(dateString: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false
+
+  const [year, month, day] = dateString.split('-').map(Number)
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return false
+  }
+
+  if (month < 1 || month > 12) return false
+
+  const daysInMonth = (() => {
+    switch (month) {
+      case 1:
+        return 31
+      case 2: {
+        const isLeapYear =
+          year % 400 === 0 ||
+          (year % 4 === 0 && year % 100 !== 0)
+
+        return isLeapYear ? 29 : 28
+      }
+      case 3:
+        return 31
+      case 4:
+        return 30
+      case 5:
+        return 31
+      case 6:
+        return 30
+      case 7:
+        return 31
+      case 8:
+        return 31
+      case 9:
+        return 30
+      case 10:
+        return 31
+      case 11:
+        return 30
+      case 12:
+        return 31
+      default:
+        return 0
+    }
+  })()
+
+  return day >= 1 && day <= daysInMonth
+}
+
+function isCropManagement(value: unknown): value is CropManagement {
+  if (!value || typeof value !== 'object') return false
+
+  const obj = value as Record<string, unknown>
+
+  return (
+    isNonEmptyString(obj.id) &&
+    isNonEmptyString(obj.cropCycleId) &&
+    typeof obj.date === 'string' &&
+    isValidCivilDate(obj.date) &&
+    typeof obj.type === 'string' &&
+    CROP_MANAGEMENT_TYPES.includes(obj.type as CropManagementType) &&
+    isNonEmptyString(obj.description) &&
+    isOptionalString(obj.productOrMaterial) &&
+    isOptionalString(obj.doseOrQuantity) &&
+    isOptionalString(obj.responsible) &&
+    isOptionalString(obj.notes) &&
+    typeof obj.createdAt === 'string' &&
+    typeof obj.updatedAt === 'string'
+  )
+}
+
+function validateAndNormalizeCropManagementInput(
+  data: CropManagementInput
+): CropManagementInput {
+  const cropCycleId = data.cropCycleId.trim()
+
+  if (!cropCycleId) {
+    throw new Error('Cultivo é obrigatório.')
+  }
+
+  const cropCycle = getCropCycleById(cropCycleId)
+
+  if (!cropCycle) {
+    throw new Error('Cultivo não encontrado.')
+  }
+
+  const date = data.date.trim()
+
+  if (!date) {
+    throw new Error('Informe a data do manejo.')
+  }
+
+  if (!isValidCivilDate(date)) {
+    throw new Error('Data do manejo inválida.')
+  }
+
+  if (!CROP_MANAGEMENT_TYPES.includes(data.type)) {
+    throw new Error('Tipo de manejo inválido.')
+  }
+
+  const description = data.description.trim()
+
+  if (!description) {
+    throw new Error('Descrição é obrigatória.')
+  }
+
+  return {
+    cropCycleId,
+    date,
+    type: data.type,
+    description,
+    productOrMaterial:
+      data.productOrMaterial?.trim() || undefined,
+    doseOrQuantity:
+      data.doseOrQuantity?.trim() || undefined,
+    responsible:
+      data.responsible?.trim() || undefined,
+    notes:
+      data.notes?.trim() || undefined,
+  }
+}
+
+export function getCropManagements(): CropManagement[] {
+  initializeCropManagementsIfNeeded()
+
+  const raw = getStorageItem<unknown>(
+    CROP_MANAGEMENTS_KEY,
+    []
+  )
+
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .filter(isCropManagement)
+    .sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date)
+
+      if (dateCompare !== 0) return dateCompare
+
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+}
+
+export function getCropManagementById(
+  id: string
+): CropManagement | undefined {
+  return getCropManagements().find(
+    management => management.id === id
+  )
+}
+
+export function getCropManagementsByCropCycleId(
+  cropCycleId: string
+): CropManagement[] {
+  return getCropManagements().filter(
+    management => management.cropCycleId === cropCycleId
+  )
+}
+
+export function getCropManagementsByLandAreaId(
+  landAreaId: string
+): CropManagement[] {
+  const cropCycles = getCropCyclesByLandAreaId(landAreaId)
+  const cropCycleIds = new Set(cropCycles.map(cycle => cycle.id))
+
+  return getCropManagements().filter(
+    management => cropCycleIds.has(management.cropCycleId)
+  )
+}
+
+export function createCropManagement(
+  data: CropManagementInput
+): CropManagement {
+  initializeCropManagementsIfNeeded()
+
+  const normalized =
+    validateAndNormalizeCropManagementInput(data)
+
+  const managements = getCropManagements()
+  const now = new Date().toISOString()
+
+  const newCropManagement: CropManagement = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  managements.push(newCropManagement)
+
+  setStorageItem(
+    CROP_MANAGEMENTS_KEY,
+    managements
+  )
+
+  return newCropManagement
+}
+
+export function updateCropManagement(
+  id: string,
+  data: CropManagementInput
+): CropManagement | undefined {
+  const managements = getCropManagements()
+
+  const index = managements.findIndex(
+    management => management.id === id
+  )
+
+  if (index === -1) return undefined
+
+  const oldManagement = managements[index]
+
+  if (
+    hasInventoryMovementByOrigin(
+      'crops',
+      'crop-management',
+      id
+    )
+  ) {
+    const protectedFieldsChanged =
+      data.cropCycleId !== oldManagement.cropCycleId ||
+      data.date !== oldManagement.date ||
+      data.type !== oldManagement.type
+
+    if (protectedFieldsChanged) {
+      throw new Error(
+        'Não é possível alterar os dados principais deste manejo porque ele possui baixa de estoque registrada.'
+      )
+    }
+  }
+
+  const normalized =
+    validateAndNormalizeCropManagementInput(data)
+
+  const updatedCropManagement: CropManagement = {
+    ...normalized,
+    id: oldManagement.id,
+    createdAt: oldManagement.createdAt,
+    updatedAt: new Date().toISOString(),
+  }
+
+  managements[index] = updatedCropManagement
+
+  setStorageItem(
+    CROP_MANAGEMENTS_KEY,
+    managements
+  )
+
+  return updatedCropManagement
+}
+
+export function deleteCropManagement(id: string): boolean {
+  if (
+    hasInventoryMovementByOrigin(
+      'crops',
+      'crop-management',
+      id
+    )
+  ) {
+    throw new Error(
+      'Não é possível excluir este manejo porque ele possui baixa de estoque registrada.'
+    )
+  }
+
+  const managements = getCropManagements()
+
+  const filtered = managements.filter(
+    management => management.id !== id
+  )
+
+  if (filtered.length === managements.length) {
+    return false
+  }
+
+  setStorageItem(
+    CROP_MANAGEMENTS_KEY,
+    filtered
+  )
+
+  return true
+}
+
+export function getCropManagementsCount(): number {
+  return getCropManagements().length
+}
+
+export function getCropManagementsCountByCropCycleId(
+  cropCycleId: string
+): number {
+  return getCropManagementsByCropCycleId(cropCycleId).length
+}
+
+export function cropCycleHasManagementWithStockConsumption(
+  cropCycleId: string
+): boolean {
+  const managements =
+    getCropManagementsByCropCycleId(cropCycleId)
+
+  return managements.some(
+    management =>
+      hasInventoryMovementByOrigin(
+        'crops',
+        'crop-management',
+        management.id
+      )
+  )
+}

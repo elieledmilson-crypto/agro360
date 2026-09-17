@@ -1,0 +1,5635 @@
+============================================================
+ARQUIVO: src/pages/Property.tsx
+============================================================
+import { mockFarm } from '../data/mockData'
+import Card from '../components/ui/Card'
+import HelpTip from '../components/ui/HelpTip'
+import { MapPin, User, Ruler } from 'lucide-react'
+
+export default function Property() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold">Propriedade</h1>
+
+          <HelpTip
+            title="Para que serve esta página?"
+            description="Aqui ficam as informações gerais da propriedade rural utilizada no Agro360."
+          />
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Informações da sua fazenda
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900/50">
+              <MapPin className="w-6 h-6 text-green-700 dark:text-green-300" />
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-lg">{mockFarm.name}</h2>
+              <p className="text-gray-600 dark:text-gray-400">
+                {mockFarm.location}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+              <User className="w-6 h-6 text-blue-700 dark:text-blue-300" />
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-lg">{mockFarm.owner}</h2>
+              <p className="text-gray-600 dark:text-gray-400">Proprietário</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+              <Ruler className="w-6 h-6 text-amber-700 dark:text-amber-300" />
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-lg">
+                {mockFarm.totalArea} ha
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400">Área total</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-6">
+        <h2 className="font-semibold mb-4">Visão geral da estrutura</h2>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Nesta seção futuramente serão exibidos detalhes das áreas, talhões,
+          pastagens e outras informações geográficas da propriedade.
+        </p>
+      </Card>
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/LandAreasPage.tsx
+============================================================
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
+import { getLandAreas, deleteLandArea } from '../../services/landService'
+import { LandArea, LandAreaType, LandAreaStatus } from '../../types'
+import LandAreaStatusBadge from '../../components/land/LandAreaStatusBadge'
+import DeleteLandAreaDialog from '../../components/land/DeleteLandAreaDialog'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import PageFeedback from '../../components/ui/PageFeedback'
+import HelpTip from '../../components/ui/HelpTip'
+import {
+  Plus,
+  Eye,
+  Pencil,
+  Trash2,
+  MapPin,
+  Ruler,
+  Sprout,
+  TreePine,
+  RefreshCcw,
+  Layers,
+  Grid3X3,
+  Building2,
+  History,
+} from 'lucide-react'
+
+interface Filters {
+  search: string
+  type: LandAreaType | ''
+  status: LandAreaStatus | ''
+}
+
+const defaultFilters: Filters = {
+  search: '',
+  type: '',
+  status: '',
+}
+
+const typeOptions: LandAreaType[] = [
+  'Piquete',
+  'Talhão',
+  'Pastagem',
+  'Reserva/APP',
+  'Infraestrutura',
+  'Área ociosa',
+  'Outro',
+]
+
+const statusOptions: LandAreaStatus[] = [
+  'Em uso',
+  'Em descanso',
+  'Em recuperação',
+  'Inativa',
+]
+
+function formatHectares(value: number): string {
+  return (
+    value.toLocaleString('pt-BR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }) + ' ha'
+  )
+}
+
+export default function LandAreasPage() {
+  const navigate = useNavigate()
+  const [areas, setAreas] = useState<LandArea[]>([])
+  const [filters, setFilters] = useState<Filters>(defaultFilters)
+  const [toDelete, setToDelete] = useState<LandArea | null>(null)
+  const [deleteError, setDeleteError] = useState('')
+
+  const loadData = useCallback(() => {
+    setAreas(getLandAreas())
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const filtered = useMemo(() => {
+    return areas.filter(area => {
+      const searchTerm = filters.search.toLowerCase().trim()
+
+      const matchesSearch =
+        !searchTerm ||
+        area.code.toLowerCase().includes(searchTerm) ||
+        area.name.toLowerCase().includes(searchTerm) ||
+        (area.purpose?.toLowerCase().includes(searchTerm) ?? false)
+
+      const matchesType =
+        !filters.type || area.type === filters.type
+
+      const matchesStatus =
+        !filters.status || area.status === filters.status
+
+      return matchesSearch && matchesType && matchesStatus
+    })
+  }, [areas, filters])
+
+  const totalHectares = useMemo(() => {
+    return areas.reduce(
+      (sum, area) => sum + area.areaHectares,
+      0
+    )
+  }, [areas])
+
+  const productiveHectares = useMemo(() => {
+    return areas
+      .filter(area =>
+        ['Piquete', 'Talhão', 'Pastagem'].includes(area.type)
+      )
+      .reduce(
+        (sum, area) => sum + area.areaHectares,
+        0
+      )
+  }, [areas])
+
+  const preservationHectares = useMemo(() => {
+    return areas
+      .filter(area => area.type === 'Reserva/APP')
+      .reduce(
+        (sum, area) => sum + area.areaHectares,
+        0
+      )
+  }, [areas])
+
+  const idleHectares = useMemo(() => {
+    return areas
+      .filter(area => area.type === 'Área ociosa')
+      .reduce(
+        (sum, area) => sum + area.areaHectares,
+        0
+      )
+  }, [areas])
+
+  const recoveringHectares = useMemo(() => {
+    return areas
+      .filter(area => area.status === 'Em recuperação')
+      .reduce(
+        (sum, area) => sum + area.areaHectares,
+        0
+      )
+  }, [areas])
+
+  const handleDelete = () => {
+    if (toDelete) {
+      try {
+        deleteLandArea(toDelete.id)
+        setToDelete(null)
+        setDeleteError('')
+        loadData()
+      } catch (error) {
+        setDeleteError(
+          error instanceof Error
+            ? error.message
+            : 'Erro ao excluir área.'
+        )
+
+        setToDelete(null)
+      }
+    }
+  }
+
+  const summaryCards = [
+    {
+      label: 'Áreas cadastradas',
+      value: areas.length.toString(),
+      icon: Layers,
+      color:
+        'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+    },
+    {
+      label: 'Área total cadastrada',
+      value: formatHectares(totalHectares),
+      icon: Ruler,
+      color:
+        'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+    },
+    {
+      label: 'Área produtiva',
+      value: formatHectares(productiveHectares),
+      icon: Sprout,
+      color:
+        'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300',
+    },
+    {
+      label: 'Preservação',
+      value: formatHectares(preservationHectares),
+      icon: TreePine,
+      color:
+        'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300',
+    },
+    {
+      label: 'Área ociosa',
+      value: formatHectares(idleHectares),
+      icon: MapPin,
+      color:
+        'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300',
+    },
+    {
+      label: 'Em recuperação',
+      value: formatHectares(recoveringHectares),
+      icon: RefreshCcw,
+      color:
+        'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300',
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">Gestão de Terras</h1>
+
+            <HelpTip
+              title="Para que serve a gestão de terras?"
+              description="Aqui você organiza as áreas da propriedade, como talhões, piquetes, pastagens, reservas e outras áreas de uso rural."
+            />
+          </div>
+
+          <p className="text-gray-600 dark:text-gray-400">
+            Organize e acompanhe as áreas da propriedade rural.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/terras/manejo"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+          >
+            <Grid3X3 className="w-4 h-4 mr-2" />
+            Manejo de piquetes
+          </Link>
+
+          <Link
+            to="/terras/estruturas"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+          >
+            <Building2 className="w-4 h-4 mr-2" />
+            Estruturas
+          </Link>
+
+          <Link
+            to="/terras/historico"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+          >
+            <History className="w-4 h-4 mr-2" />
+            Histórico de utilização
+          </Link>
+
+          <Button onClick={() => navigate('/terras/nova')}>
+            <Plus className="w-4 h-4 mr-2 inline" />
+            Nova área
+          </Button>
+        </div>
+      </div>
+
+      {deleteError && (
+        <PageFeedback
+          type="error"
+          message={deleteError}
+        />
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {summaryCards.map(card => {
+          const Icon = card.icon
+
+          return (
+            <Card
+              key={card.label}
+              className="p-4"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {card.label}
+                  </p>
+
+                  <p className="text-2xl font-bold mt-1">
+                    {card.value}
+                  </p>
+                </div>
+
+                <div className={`p-2 rounded-lg ${card.color}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <input
+            type="text"
+            placeholder="Pesquisar código, nome ou finalidade..."
+            value={filters.search}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                search: e.target.value,
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+
+          <select
+            value={filters.type}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                type:
+                  e.target.value as LandAreaType | '',
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="">
+              Tipo: todos
+            </option>
+
+            {typeOptions.map(option => (
+              <option
+                key={option}
+                value={option}
+              >
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filters.status}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                status:
+                  e.target.value as LandAreaStatus | '',
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="">
+              Situação: todas
+            </option>
+
+            {statusOptions.map(option => (
+              <option
+                key={option}
+                value={option}
+              >
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={() =>
+              setFilters(defaultFilters)
+            }
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline self-center"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      </div>
+
+      {areas.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            Nenhuma área cadastrada.
+          </p>
+
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Cadastre a primeira área da propriedade para iniciar a gestão de terras.
+          </p>
+
+          <Button
+            className="mt-4"
+            onClick={() =>
+              navigate('/terras/nova')
+            }
+          >
+            <Plus className="w-4 h-4 mr-2 inline" />
+            Cadastrar primeira área
+          </Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            Nenhuma área encontrada com os filtros selecionados.
+          </p>
+
+          <button
+            onClick={() =>
+              setFilters(defaultFilters)
+            }
+            className="mt-2 text-green-600 hover:underline text-sm"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                <tr>
+                  <th className="px-4 py-3">
+                    Código
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Nome
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Tipo
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Área
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Situação
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Finalidade
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filtered.map(area => (
+                  <tr
+                    key={area.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition"
+                  >
+                    <td className="px-4 py-3 font-medium">
+                      {area.code}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {area.name}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {area.type}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {formatHectares(area.areaHectares)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <LandAreaStatusBadge
+                        status={area.status}
+                      />
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {area.purpose ?? '—'}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() =>
+                            navigate(`/terras/${area.id}`)
+                          }
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                          aria-label="Visualizar área"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            navigate(`/terras/${area.id}/editar`)
+                          }
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                          aria-label="Editar área"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setToDelete(area)
+                          }
+                          className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600"
+                          aria-label="Excluir área"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="md:hidden grid grid-cols-1 gap-4">
+            {filtered.map(area => (
+              <Card
+                key={area.id}
+                className="p-4"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-medium text-sm">
+                      {area.code}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {area.name}
+                    </p>
+                  </div>
+
+                  <LandAreaStatusBadge
+                    status={area.status}
+                  />
+                </div>
+
+                <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                  <p>
+                    Tipo: {area.type}
+                  </p>
+
+                  <p>
+                    Área: {formatHectares(area.areaHectares)}
+                  </p>
+
+                  {area.purpose && (
+                    <p>
+                      Finalidade: {area.purpose}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      navigate(`/terras/${area.id}`)
+                    }
+                    className="text-xs px-2 py-1"
+                  >
+                    Ver
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      navigate(`/terras/${area.id}/editar`)
+                    }
+                    className="text-xs px-2 py-1"
+                  >
+                    Editar
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      setToDelete(area)
+                    }
+                    className="text-xs px-2 py-1 text-red-600 border-red-300 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900/30"
+                  >
+                    Excluir
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+
+      <DeleteLandAreaDialog
+        open={!!toDelete}
+        onClose={() =>
+          setToDelete(null)
+        }
+        onConfirm={handleDelete}
+        areaCode={toDelete?.code}
+        areaName={toDelete?.name}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/NewLandAreaPage.tsx
+============================================================
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import LandAreaForm from '../../components/land/LandAreaForm'
+import { createLandArea } from '../../services/landService'
+import { LandArea } from '../../types'
+import HelpTip from '../../components/ui/HelpTip'
+
+export default function NewLandAreaPage() {
+  const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const handleSubmit = (
+    data: Omit<LandArea, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
+    setSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const area = createLandArea(data)
+
+      navigate(`/terras/${area.id}`, {
+        state: {
+          successMessage: 'Área cadastrada com sucesso.',
+        },
+      })
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao cadastrar área.'
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold">Nova área</h1>
+
+          <HelpTip
+            title="O que devo fazer aqui?"
+            description="Preencha as informações abaixo para cadastrar uma nova área da propriedade no Agro360."
+          />
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Cadastre uma nova área da propriedade
+        </p>
+      </div>
+
+      <LandAreaForm
+        onSubmit={handleSubmit}
+        onCancel={() => navigate('/terras')}
+        submitting={submitting}
+        submitError={submitError}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/LandAreaDetailsPage.tsx
+============================================================
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom'
+import { getLandAreaById, deleteLandArea } from '../../services/landService'
+import {
+  getActiveOccupationByLandAreaId,
+  getOccupationHistoryByLandAreaId,
+  getAnimalsInPaddockOccupation,
+  getCurrentOccupationDays,
+  getDaysBetween,
+} from '../../services/paddockOccupationService'
+import { getLotById } from '../../services/lotService'
+import { getRuralStructuresByLandAreaId } from '../../services/ruralStructureService'
+import { getLandUseRecordsByLandAreaId } from '../../services/landUseService'
+import {
+  getCropCyclesByLandAreaId,
+  getCropCycleById,
+} from '../../services/cropService'
+import { getSoilAnalysesByLandAreaId } from '../../services/soilAnalysisService'
+import { getCropManagementsByLandAreaId } from '../../services/cropManagementService'
+import { getHarvestRecordsByLandAreaId } from '../../services/harvestService'
+import { getMachineUsageRecordsByLandAreaId } from '../../services/machineUsageService'
+import { getMachineById } from '../../services/machineService'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import LandAreaStatusBadge from '../../components/land/LandAreaStatusBadge'
+import DeleteLandAreaDialog from '../../components/land/DeleteLandAreaDialog'
+import PageFeedback from '../../components/ui/PageFeedback'
+import HelpTip from '../../components/ui/HelpTip'
+import CropCycleStatusBadge from '../../components/crops/CropCycleStatusBadge'
+import CropManagementTypeBadge from '../../components/crops/CropManagementTypeBadge'
+import {
+  Pencil,
+  Trash2,
+  ArrowLeft,
+  Grid3X3,
+  Building2,
+  History,
+  Sprout,
+  FlaskConical,
+  ClipboardList,
+  Gavel,
+  Tractor,
+} from 'lucide-react'
+
+export default function LandAreaDetailsPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  const area = id ? getLandAreaById(id) : undefined
+
+  const activeOccupation =
+    area?.type === 'Piquete' && id
+      ? getActiveOccupationByLandAreaId(id)
+      : undefined
+
+  const occupationHistory =
+    area?.type === 'Piquete' && id
+      ? getOccupationHistoryByLandAreaId(id)
+      : []
+
+  const linkedStructures = id
+    ? getRuralStructuresByLandAreaId(id)
+    : []
+
+  const landUseRecords = id
+    ? getLandUseRecordsByLandAreaId(id)
+    : []
+
+  const cropCycles =
+    area?.type === 'Talhão' && id
+      ? getCropCyclesByLandAreaId(id)
+      : []
+
+  const soilAnalyses =
+    area?.type === 'Talhão' && id
+      ? getSoilAnalysesByLandAreaId(id)
+      : []
+
+  const cropManagements =
+    area?.type === 'Talhão' && id
+      ? getCropManagementsByLandAreaId(id)
+      : []
+
+  const harvestRecords =
+    area?.type === 'Talhão' && id
+      ? getHarvestRecordsByLandAreaId(id)
+      : []
+
+  const machineUsageRecords =
+    area?.type === 'Talhão' && id
+      ? getMachineUsageRecordsByLandAreaId(id)
+      : []
+
+  useEffect(() => {
+    const state = location.state as {
+      successMessage?: string
+    } | null
+
+    if (!state?.successMessage) return
+
+    setSuccessMessage(state.successMessage)
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    })
+  }, [location.pathname, location.state, navigate])
+
+  useEffect(() => {
+    if (!successMessage) return
+
+    const timer = setTimeout(
+      () => setSuccessMessage(null),
+      5000
+    )
+
+    return () => clearTimeout(timer)
+  }, [successMessage])
+
+  if (!area) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+          Área não encontrada
+        </p>
+
+        <Button
+          className="mt-4"
+          onClick={() => navigate('/terras')}
+        >
+          Voltar para terras
+        </Button>
+      </div>
+    )
+  }
+
+  const handleDelete = () => {
+    if (!id) return
+
+    try {
+      deleteLandArea(id)
+      navigate('/terras')
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao excluir área.'
+      )
+      setDeleteOpen(false)
+    }
+  }
+
+  const formatDate = (date: string) =>
+    new Date(date + 'T00:00:00').toLocaleDateString('pt-BR')
+
+  const getMachineLabel = (machineId: string) => {
+    const machine = getMachineById(machineId)
+
+    return machine
+      ? `${machine.code} — ${machine.name}`
+      : 'Máquina ou equipamento não encontrado'
+  }
+
+  const getCropLabel = (cropCycleId?: string) => {
+    if (!cropCycleId) return 'Sem cultivo'
+
+    const cycle = getCropCycleById(cropCycleId)
+
+    return cycle
+      ? `${cycle.crop} — ${cycle.season}`
+      : 'Cultivo não encontrado'
+  }
+
+  const usageCount = machineUsageRecords.length
+
+  const usageCountLabel =
+    usageCount === 1
+      ? '1 registro'
+      : `${usageCount} registros`
+
+  return (
+    <div className="space-y-6">
+      {successMessage && (
+        <PageFeedback
+          type="success"
+          message={successMessage}
+        />
+      )}
+
+      {deleteError && (
+        <PageFeedback
+          type="error"
+          message={deleteError}
+        />
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <button
+            onClick={() => navigate('/terras')}
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1 mb-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar para terras
+          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              {area.code}
+            </h1>
+
+            <HelpTip
+              title="O que encontro nesta página?"
+              description="Aqui você consulta as informações desta área e os históricos vinculados a ela, como manejo de piquete, cultivos, análises de solo, estruturas e uso de máquinas."
+            />
+          </div>
+
+          <p className="text-lg text-gray-600 dark:text-gray-400">
+            {area.name}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() =>
+              navigate(`/terras/${area.id}/editar`)
+            }
+          >
+            <Pencil className="w-4 h-4 mr-2 inline" />
+            Editar área
+          </Button>
+
+          <Button
+            variant="outline"
+            className="text-red-600 border-red-300 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900/30"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="w-4 h-4 mr-2 inline" />
+            Excluir área
+          </Button>
+        </div>
+      </div>
+
+      <Card className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Código
+            </p>
+            <p className="font-medium">{area.code}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Nome
+            </p>
+            <p className="font-medium">{area.name}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Tipo
+            </p>
+            <p className="font-medium">{area.type}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Área em hectares
+            </p>
+            <p className="font-medium">
+              {area.areaHectares.toLocaleString('pt-BR', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+              })}{' '}
+              ha
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Finalidade
+            </p>
+            <p className="font-medium">
+              {area.purpose ?? 'Não informada'}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Situação
+            </p>
+            <LandAreaStatusBadge status={area.status} />
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Data de cadastro
+            </p>
+            <p className="font-medium">
+              {new Date(area.createdAt).toLocaleDateString(
+                'pt-BR'
+              )}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Última atualização
+            </p>
+            <p className="font-medium">
+              {new Date(area.updatedAt).toLocaleDateString(
+                'pt-BR'
+              )}
+            </p>
+          </div>
+        </div>
+
+        {area.description && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Descrição
+            </p>
+            <p className="mt-1">{area.description}</p>
+          </div>
+        )}
+      </Card>
+
+      {area.type === 'Piquete' && (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-semibold">
+                Manejo do piquete
+              </h2>
+
+              <HelpTip
+                title="Para que serve o manejo do piquete?"
+                description="Aqui você acompanha qual lote está no piquete, desde quando e por quantos dias, além das ocupações anteriores."
+              />
+            </div>
+
+            <Link
+              to="/terras/manejo"
+              className="inline-flex items-center text-sm text-green-600 hover:underline"
+            >
+              <Grid3X3 className="w-4 h-4 mr-1" />
+              Ver manejo completo
+            </Link>
+          </div>
+
+          {activeOccupation ? (
+            (() => {
+              const lot = getLotById(
+                activeOccupation.lotId
+              )
+
+              const animals =
+                getAnimalsInPaddockOccupation(
+                  activeOccupation
+                )
+
+              const days =
+                getCurrentOccupationDays(
+                  activeOccupation
+                )
+
+              return (
+                <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                  <p className="font-medium">
+                    {lot?.name ??
+                      'Lote não encontrado'}
+                  </p>
+
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Data de entrada:{' '}
+                    {formatDate(
+                      activeOccupation.entryDate
+                    )}
+                  </p>
+
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Dias de ocupação: {days}
+                  </p>
+
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Animais no piquete:{' '}
+                    {animals.length}
+                  </p>
+
+                  {activeOccupation.notes && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Observações:{' '}
+                      {activeOccupation.notes}
+                    </p>
+                  )}
+                </div>
+              )
+            })()
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Piquete sem ocupação atual.
+            </p>
+          )}
+
+          <h3 className="font-medium mt-6 mb-3">
+            Histórico de ocupações
+          </h3>
+
+          {occupationHistory.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Nenhuma ocupação anterior registrada.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {occupationHistory.map(occ => {
+                const lot = getLotById(occ.lotId)
+
+                return (
+                  <div
+                    key={occ.id}
+                    className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                  >
+                    <p className="font-medium">
+                      {lot?.name ??
+                        'Lote não encontrado'}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Entrada:{' '}
+                      {formatDate(occ.entryDate)} ·
+                      Saída:{' '}
+                      {occ.exitDate
+                        ? formatDate(occ.exitDate)
+                        : '—'}
+                    </p>
+
+                    {occ.exitDate && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Duração:{' '}
+                        {getDaysBetween(
+                          occ.entryDate,
+                          occ.exitDate
+                        )}{' '}
+                        dias
+                      </p>
+                    )}
+
+                    {occ.notes && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {occ.notes}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card className="p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-semibold">
+              Histórico de utilização
+            </h2>
+
+            <HelpTip
+              title="O que é este histórico?"
+              description="Aqui você consulta como esta área foi utilizada ao longo do tempo, com tipo de uso, período e observações."
+            />
+          </div>
+
+          <Link
+            to="/terras/historico"
+            className="inline-flex items-center text-sm text-green-600 hover:underline"
+          >
+            <History className="w-4 h-4 mr-1" />
+            Ver histórico completo
+          </Link>
+        </div>
+
+        {landUseRecords.length === 0 ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Nenhum registro de utilização para esta área.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {landUseRecords.map(record => (
+              <button
+                key={record.id}
+                onClick={() =>
+                  navigate(
+                    `/terras/historico/${record.id}`
+                  )
+                }
+                className="block w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                <p className="font-medium">
+                  {record.type}
+                </p>
+
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {formatDate(record.startDate)}
+                  {record.endDate
+                    ? ` → ${formatDate(
+                        record.endDate
+                      )}`
+                    : ' → em andamento'}
+                </p>
+
+                {record.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {record.description}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {area.type === 'Talhão' && (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h2 className="font-semibold">
+              Cultivos e safras
+            </h2>
+
+            <Link
+              to="/cultivos"
+              className="inline-flex items-center text-sm text-green-600 hover:underline"
+            >
+              <Sprout className="w-4 h-4 mr-1" />
+              Ver todos os cultivos
+            </Link>
+          </div>
+
+          {cropCycles.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Nenhum cultivo registrado neste talhão.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {cropCycles.map(cycle => (
+                <button
+                  key={cycle.id}
+                  onClick={() =>
+                    navigate(`/cultivos/${cycle.id}`)
+                  }
+                  className="block w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  <p className="font-medium">
+                    {cycle.crop}{' '}
+                    {cycle.cultivar
+                      ? `— ${cycle.cultivar}`
+                      : ''}
+                  </p>
+
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Safra: {cycle.season}
+                  </p>
+
+                  {cycle.plantingDate && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Plantio:{' '}
+                      {formatDate(
+                        cycle.plantingDate
+                      )}
+                    </p>
+                  )}
+
+                  {cycle.expectedHarvestDate && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Colheita prevista:{' '}
+                      {formatDate(
+                        cycle.expectedHarvestDate
+                      )}
+                    </p>
+                  )}
+
+                  <CropCycleStatusBadge
+                    status={cycle.status}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {area.type === 'Talhão' && (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h2 className="font-semibold">
+              Análises de solo
+            </h2>
+
+            <Link
+              to="/cultivos/solo"
+              className="inline-flex items-center text-sm text-green-600 hover:underline"
+            >
+              <FlaskConical className="w-4 h-4 mr-1" />
+              Ver todas as análises
+            </Link>
+          </div>
+
+          {soilAnalyses.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Nenhuma análise de solo registrada neste
+              talhão.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {soilAnalyses.map(analysis => (
+                <button
+                  key={analysis.id}
+                  onClick={() =>
+                    navigate(
+                      `/cultivos/solo/${analysis.id}`
+                    )
+                  }
+                  className="block w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  <p className="font-medium">
+                    {formatDate(
+                      analysis.sampleDate
+                    )}
+                  </p>
+
+                  {analysis.laboratory && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Laboratório:{' '}
+                      {analysis.laboratory}
+                    </p>
+                  )}
+
+                  {analysis.sampleCode && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Código:{' '}
+                      {analysis.sampleCode}
+                    </p>
+                  )}
+
+                  {analysis.ph !== undefined && (
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      pH: {analysis.ph}
+                    </p>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {area.type === 'Talhão' && (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h2 className="font-semibold">
+              Manejos agrícolas
+            </h2>
+
+            <Link
+              to="/cultivos/manejos"
+              className="inline-flex items-center text-sm text-green-600 hover:underline"
+            >
+              <ClipboardList className="w-4 h-4 mr-1" />
+              Ver todos os manejos
+            </Link>
+          </div>
+
+          {cropManagements.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Nenhum manejo agrícola registrado neste
+              talhão.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {cropManagements.map(management => {
+                const cycle = cropCycles.find(
+                  item =>
+                    item.id ===
+                    management.cropCycleId
+                )
+
+                return (
+                  <button
+                    key={management.id}
+                    onClick={() =>
+                      navigate(
+                        `/cultivos/manejos/${management.id}`
+                      )
+                    }
+                    className="block w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                  >
+                    <p className="font-medium">
+                      {formatDate(
+                        management.date
+                      )}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {cycle
+                        ? `${cycle.crop} — ${cycle.season}`
+                        : 'Cultivo não encontrado'}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {management.type}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {management.description}
+                    </p>
+
+                    <CropManagementTypeBadge
+                      type={management.type}
+                    />
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {area.type === 'Talhão' && (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h2 className="font-semibold">
+              Colheitas e produtividade
+            </h2>
+
+            <Link
+              to="/cultivos/colheitas"
+              className="inline-flex items-center text-sm text-green-600 hover:underline"
+            >
+              <Gavel className="w-4 h-4 mr-1" />
+              Ver todas as colheitas
+            </Link>
+          </div>
+
+          {harvestRecords.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Nenhuma colheita registrada neste talhão.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {harvestRecords.map(record => {
+                const cycle = cropCycles.find(
+                  item =>
+                    item.id ===
+                    record.cropCycleId
+                )
+
+                return (
+                  <button
+                    key={record.id}
+                    onClick={() =>
+                      navigate(
+                        `/cultivos/colheitas/${record.id}`
+                      )
+                    }
+                    className="block w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                  >
+                    <p className="font-medium">
+                      {formatDate(
+                        record.harvestDate
+                      )}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {cycle
+                        ? `${cycle.crop}${
+                            cycle.cultivar
+                              ? ` — ${cycle.cultivar}`
+                              : ''
+                          } — ${
+                            cycle.season
+                          }`
+                        : 'Cultivo não encontrado'}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Área:{' '}
+                      {record.harvestedAreaHectares.toLocaleString(
+                        'pt-BR',
+                        {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        }
+                      )}{' '}
+                      ha
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Produção:{' '}
+                      {record.productionQuantity.toLocaleString(
+                        'pt-BR',
+                        {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        }
+                      )}{' '}
+                      {record.productionUnit}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {area.type === 'Talhão' && (
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-semibold">
+                  Utilização de máquinas
+                </h2>
+
+                <HelpTip
+                  title="O que é esta seção?"
+                  description="Aqui você acompanha quais máquinas foram utilizadas neste talhão, qual operação realizaram e por quantas horas trabalharam."
+                />
+              </div>
+
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {usageCountLabel}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to={`/maquinas/utilizacoes/nova?landAreaId=${area.id}`}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition"
+              >
+                <Tractor className="w-4 h-4 mr-2" />
+                Registrar utilização
+              </Link>
+
+              {machineUsageRecords.length > 0 && (
+                <Link
+                  to={`/maquinas/utilizacoes?landAreaId=${area.id}`}
+                  className="inline-flex items-center text-sm text-green-600 hover:underline"
+                >
+                  <Tractor className="w-4 h-4 mr-1" />
+                  Ver todo histórico
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {machineUsageRecords.length === 0 ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Nenhuma utilização de máquina registrada
+              para este talhão.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {machineUsageRecords
+                .slice(0, 5)
+                .map(record => (
+                  <button
+                    key={record.id}
+                    onClick={() =>
+                      navigate(
+                        `/maquinas/utilizacoes/${record.id}`
+                      )
+                    }
+                    className="block w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                  >
+                    <p className="font-medium">
+                      {formatDate(
+                        record.operationDate
+                      )}{' '}
+                      · {record.operationType}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {getMachineLabel(
+                        record.machineId
+                      )}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {getCropLabel(
+                        record.cropCycleId
+                      )}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Horas:{' '}
+                      {record.workedHours.toLocaleString(
+                        'pt-BR',
+                        {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        }
+                      )}{' '}
+                      h
+                    </p>
+                  </button>
+                ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold">
+            Estruturas vinculadas
+          </h2>
+
+          <Link
+            to="/terras/estruturas"
+            className="inline-flex items-center text-sm text-green-600 hover:underline"
+          >
+            <Building2 className="w-4 h-4 mr-1" />
+            Ver todas
+          </Link>
+        </div>
+
+        {linkedStructures.length === 0 ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Nenhuma estrutura vinculada a esta área.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {linkedStructures.map(structure => (
+              <button
+                key={structure.id}
+                onClick={() =>
+                  navigate(
+                    `/terras/estruturas/${structure.id}`
+                  )
+                }
+                className="block w-full text-left p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+              >
+                <p className="font-medium">
+                  {structure.code} —{' '}
+                  {structure.name}
+                </p>
+
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {structure.type} ·{' '}
+                  {structure.status} ·{' '}
+                  {structure.condition}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <DeleteLandAreaDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        areaCode={area.code}
+        areaName={area.name}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/EditLandAreaPage.tsx
+============================================================
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import LandAreaForm from '../../components/land/LandAreaForm'
+import {
+  getLandAreaById,
+  updateLandArea,
+} from '../../services/landService'
+import { LandArea } from '../../types'
+import HelpTip from '../../components/ui/HelpTip'
+
+export default function EditLandAreaPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const area = id
+    ? getLandAreaById(id)
+    : undefined
+
+  if (!area) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+          Área não encontrada
+        </p>
+
+        <button
+          onClick={() => navigate('/terras')}
+          className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+        >
+          Voltar para terras
+        </button>
+      </div>
+    )
+  }
+
+  const handleSubmit = (
+    data: Omit<
+      LandArea,
+      'id' | 'createdAt' | 'updatedAt'
+    >
+  ) => {
+    setSubmitting(true)
+    setSubmitError('')
+
+    try {
+      updateLandArea(area.id, data)
+
+      navigate(`/terras/${area.id}`, {
+        state: {
+          successMessage:
+            'Área atualizada com sucesso.',
+        },
+      })
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao atualizar área.'
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold">
+            Editar área
+          </h1>
+
+          <HelpTip
+            title="Para que serve esta página?"
+            description="Aqui você pode atualizar as informações desta área. As alterações serão salvas no cadastro existente."
+          />
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Atualize os dados de {area.code}
+        </p>
+      </div>
+
+      <LandAreaForm
+        area={area}
+        onSubmit={handleSubmit}
+        onCancel={() =>
+          navigate(`/terras/${area.id}`)
+        }
+        submitting={submitting}
+        submitError={submitError}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/PaddockManagementPage.tsx
+============================================================
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import {
+  getPaddockCount,
+  getOccupiedPaddockCount,
+  getAvailablePaddockCount,
+  getCurrentLotsInPaddocksCount,
+  getCurrentAnimalsInPaddocksCount,
+  getActivePaddockOccupations,
+  getPaddockOccupations,
+  finishPaddockOccupation,
+  getCurrentOccupationDays,
+  getDaysBetween,
+  getAnimalsInPaddockOccupation,
+} from '../../services/paddockOccupationService'
+import { getLandAreas } from '../../services/landService'
+import { getLots } from '../../services/lotService'
+import {
+  PaddockOccupation,
+  LandArea,
+  Lot,
+} from '../../types'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import FinishOccupationDialog from '../../components/land/FinishOccupationDialog'
+import PageFeedback from '../../components/ui/PageFeedback'
+import HelpTip from '../../components/ui/HelpTip'
+import {
+  Plus,
+  Users,
+  Grid3X3,
+} from 'lucide-react'
+
+export default function PaddockManagementPage() {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const [, setRefreshTrigger] =
+    useState(0)
+
+  const [finishTarget, setFinishTarget] =
+    useState<PaddockOccupation | null>(
+      null
+    )
+
+  const [finishError, setFinishError] =
+    useState('')
+
+  const [
+    successMessage,
+    setSuccessMessage,
+  ] = useState<string | null>(null)
+
+  const forceRefresh = () =>
+    setRefreshTrigger(prev => prev + 1)
+
+  const paddockCount =
+    getPaddockCount()
+
+  const occupiedCount =
+    getOccupiedPaddockCount()
+
+  const availableCount =
+    getAvailablePaddockCount()
+
+  const lotsInPaddocks =
+    getCurrentLotsInPaddocksCount()
+
+  const animalsInPaddocks =
+    getCurrentAnimalsInPaddocksCount()
+
+  const activeOccupations =
+    getActivePaddockOccupations()
+
+  const historyOccupations =
+    getPaddockOccupations()
+      .filter(occ => occ.exitDate)
+      .sort((a, b) =>
+        (
+          b.exitDate ?? b.entryDate
+        ).localeCompare(
+          a.exitDate ?? a.entryDate
+        )
+      )
+
+  const landAreas = getLandAreas()
+  const lots = getLots()
+
+  const getArea = (
+    id: string
+  ): LandArea | undefined =>
+    landAreas.find(a => a.id === id)
+
+  const getLot = (
+    id: string
+  ): Lot | undefined =>
+    lots.find(l => l.id === id)
+
+  useEffect(() => {
+    const state = location.state as {
+      successMessage?: string
+    } | null
+
+    if (!state?.successMessage) return
+
+    setSuccessMessage(
+      state.successMessage
+    )
+
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    })
+  }, [
+    location.pathname,
+    location.state,
+    navigate,
+  ])
+
+  useEffect(() => {
+    if (!successMessage) return
+
+    const timer = setTimeout(
+      () => setSuccessMessage(null),
+      5000
+    )
+
+    return () => clearTimeout(timer)
+  }, [successMessage])
+
+  const handleFinishConfirm = (
+    exitDate: string
+  ) => {
+    if (!finishTarget) return
+
+    try {
+      finishPaddockOccupation(
+        finishTarget.id,
+        exitDate
+      )
+
+      setFinishTarget(null)
+      setFinishError('')
+      setSuccessMessage(
+        'Ocupação encerrada com sucesso.'
+      )
+
+      forceRefresh()
+    } catch (error) {
+      setFinishError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao encerrar ocupação.'
+      )
+    }
+  }
+
+  const summaryCards = [
+    {
+      label: 'Total de piquetes',
+      value: paddockCount.toString(),
+      icon: Grid3X3,
+      color:
+        'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+    },
+    {
+      label: 'Piquetes ocupados',
+      value: occupiedCount.toString(),
+      icon: Grid3X3,
+      color:
+        'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+    },
+    {
+      label: 'Piquetes disponíveis',
+      value: availableCount.toString(),
+      icon: Grid3X3,
+      color:
+        'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300',
+    },
+    {
+      label: 'Lotes em piquetes',
+      value:
+        lotsInPaddocks.toString(),
+      icon: Users,
+      color:
+        'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300',
+    },
+    {
+      label: 'Animais em piquetes',
+      value:
+        animalsInPaddocks.toString(),
+      icon: Users,
+      color:
+        'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300',
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              Manejo de Piquetes
+            </h1>
+
+            <HelpTip
+              title="Para que serve o manejo de piquetes?"
+              description="Aqui você acompanha quais lotes estão ocupando cada piquete, o período de permanência e o histórico de movimentações."
+            />
+          </div>
+
+          <p className="text-gray-600 dark:text-gray-400">
+            Aloque lotes em piquetes e acompanhe o
+            histórico de ocupação.
+          </p>
+        </div>
+
+        <Button
+          onClick={() =>
+            navigate('/terras/manejo/nova')
+          }
+        >
+          <Plus className="w-4 h-4 mr-2 inline" />
+          Alocar lote em piquete
+        </Button>
+      </div>
+
+      {successMessage && (
+        <PageFeedback
+          type="success"
+          message={successMessage}
+        />
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {summaryCards.map(card => {
+          const Icon = card.icon
+
+          return (
+            <Card
+              key={card.label}
+              className="p-4"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {card.label}
+                  </p>
+
+                  <p className="text-2xl font-bold mt-1">
+                    {card.value}
+                  </p>
+                </div>
+
+                <div
+                  className={`p-2 rounded-lg ${card.color}`}
+                >
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      <Card className="p-6">
+        <h2 className="font-semibold mb-4">
+          Ocupações atuais
+        </h2>
+
+        {activeOccupations.length === 0 ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Nenhuma ocupação ativa no momento.
+          </p>
+        ) : (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                  <tr>
+                    <th className="px-4 py-3">
+                      Piquete
+                    </th>
+                    <th className="px-4 py-3">
+                      Lote
+                    </th>
+                    <th className="px-4 py-3">
+                      Animais
+                    </th>
+                    <th className="px-4 py-3">
+                      Entrada
+                    </th>
+                    <th className="px-4 py-3">
+                      Dias
+                    </th>
+                    <th className="px-4 py-3">
+                      Observações
+                    </th>
+                    <th className="px-4 py-3">
+                      Ações
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {activeOccupations.map(
+                    occ => {
+                      const area =
+                        getArea(
+                          occ.landAreaId
+                        )
+
+                      const lot =
+                        getLot(occ.lotId)
+
+                      const animalsCount =
+                        getAnimalsInPaddockOccupation(
+                          occ
+                        ).length
+
+                      return (
+                        <tr
+                          key={occ.id}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                        >
+                          <td className="px-4 py-3 font-medium">
+                            {area?.code} —{' '}
+                            {area?.name}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {lot?.name ??
+                              '—'}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {animalsCount}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {new Date(
+                              occ.entryDate +
+                                'T00:00:00'
+                            ).toLocaleDateString(
+                              'pt-BR'
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {getCurrentOccupationDays(
+                              occ
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {occ.notes ??
+                              '—'}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setFinishTarget(
+                                  occ
+                                )
+                                setFinishError(
+                                  ''
+                                )
+                              }}
+                              className="text-xs"
+                            >
+                              Encerrar
+                              ocupação
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    }
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="md:hidden grid grid-cols-1 gap-4">
+              {activeOccupations.map(
+                occ => {
+                  const area =
+                    getArea(
+                      occ.landAreaId
+                    )
+
+                  const lot =
+                    getLot(occ.lotId)
+
+                  const animalsCount =
+                    getAnimalsInPaddockOccupation(
+                      occ
+                    ).length
+
+                  return (
+                    <Card
+                      key={occ.id}
+                      className="p-4"
+                    >
+                      <p className="font-medium">
+                        {area?.code} —{' '}
+                        {area?.name}
+                      </p>
+
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Lote:{' '}
+                        {lot?.name ?? '—'}
+                      </p>
+
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Animais:{' '}
+                        {animalsCount}
+                      </p>
+
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Entrada:{' '}
+                        {new Date(
+                          occ.entryDate +
+                            'T00:00:00'
+                        ).toLocaleDateString(
+                          'pt-BR'
+                        )}
+                      </p>
+
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Dias:{' '}
+                        {getCurrentOccupationDays(
+                          occ
+                        )}
+                      </p>
+
+                      {occ.notes && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Obs: {occ.notes}
+                        </p>
+                      )}
+
+                      <div className="mt-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setFinishTarget(
+                              occ
+                            )
+                            setFinishError(
+                              ''
+                            )
+                          }}
+                          className="text-xs"
+                        >
+                          Encerrar
+                          ocupação
+                        </Button>
+                      </div>
+                    </Card>
+                  )
+                }
+              )}
+            </div>
+          </>
+        )}
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="font-semibold mb-4">
+          Histórico de ocupações
+        </h2>
+
+        {historyOccupations.length ===
+        0 ? (
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Nenhuma ocupação encerrada ainda.
+          </p>
+        ) : (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                  <tr>
+                    <th className="px-4 py-3">
+                      Piquete
+                    </th>
+                    <th className="px-4 py-3">
+                      Lote
+                    </th>
+                    <th className="px-4 py-3">
+                      Entrada
+                    </th>
+                    <th className="px-4 py-3">
+                      Saída
+                    </th>
+                    <th className="px-4 py-3">
+                      Duração
+                    </th>
+                    <th className="px-4 py-3">
+                      Observações
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {historyOccupations.map(
+                    occ => {
+                      const area =
+                        getArea(
+                          occ.landAreaId
+                        )
+
+                      const lot =
+                        getLot(occ.lotId)
+
+                      return (
+                        <tr
+                          key={occ.id}
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                        >
+                          <td className="px-4 py-3 font-medium">
+                            {area?.code} —{' '}
+                            {area?.name}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {lot?.name ??
+                              '—'}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {new Date(
+                              occ.entryDate +
+                                'T00:00:00'
+                            ).toLocaleDateString(
+                              'pt-BR'
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {occ.exitDate
+                              ? new Date(
+                                  occ.exitDate +
+                                    'T00:00:00'
+                                ).toLocaleDateString(
+                                  'pt-BR'
+                                )
+                              : '—'}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {occ.exitDate
+                              ? getDaysBetween(
+                                  occ.entryDate,
+                                  occ.exitDate
+                                )
+                              : '—'}
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {occ.notes ??
+                              '—'}
+                          </td>
+                        </tr>
+                      )
+                    }
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="md:hidden grid grid-cols-1 gap-4">
+              {historyOccupations.map(
+                occ => {
+                  const area =
+                    getArea(
+                      occ.landAreaId
+                    )
+
+                  const lot =
+                    getLot(occ.lotId)
+
+                  return (
+                    <Card
+                      key={occ.id}
+                      className="p-4"
+                    >
+                      <p className="font-medium">
+                        {area?.code} —{' '}
+                        {area?.name}
+                      </p>
+
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Lote:{' '}
+                        {lot?.name ?? '—'}
+                      </p>
+
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Entrada:{' '}
+                        {new Date(
+                          occ.entryDate +
+                            'T00:00:00'
+                        ).toLocaleDateString(
+                          'pt-BR'
+                        )}
+                      </p>
+
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Saída:{' '}
+                        {occ.exitDate
+                          ? new Date(
+                              occ.exitDate +
+                                'T00:00:00'
+                            ).toLocaleDateString(
+                              'pt-BR'
+                            )
+                          : '—'}
+                      </p>
+
+                      {occ.exitDate && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Duração:{' '}
+                          {getDaysBetween(
+                            occ.entryDate,
+                            occ.exitDate
+                          )}{' '}
+                          dias
+                        </p>
+                      )}
+
+                      {occ.notes && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Obs: {occ.notes}
+                        </p>
+                      )}
+                    </Card>
+                  )
+                }
+              )}
+            </div>
+          </>
+        )}
+      </Card>
+
+      <FinishOccupationDialog
+        open={!!finishTarget}
+        onClose={() => {
+          setFinishTarget(null)
+          setFinishError('')
+        }}
+        onConfirm={handleFinishConfirm}
+        occupationInfo={
+          finishTarget
+            ? {
+                paddockCode:
+                  getArea(
+                    finishTarget.landAreaId
+                  )?.code ?? '—',
+
+                paddockName:
+                  getArea(
+                    finishTarget.landAreaId
+                  )?.name ?? '—',
+
+                lotName:
+                  getLot(
+                    finishTarget.lotId
+                  )?.name ?? '—',
+
+                entryDate:
+                  finishTarget.entryDate,
+              }
+            : null
+        }
+        submitError={finishError}
+        onClearSubmitError={() =>
+          setFinishError('')
+        }
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/RuralStructuresPage.tsx
+============================================================
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  getRuralStructures,
+  deleteRuralStructure,
+  getRuralStructureCountByType,
+  getRuralStructureCountByStatus,
+  getLandAreasForStructure,
+} from '../../services/ruralStructureService'
+import {
+  RuralStructure,
+  RuralStructureType,
+  RuralStructureStatus,
+  RuralStructureCondition,
+} from '../../types'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import PageFeedback from '../../components/ui/PageFeedback'
+import HelpTip from '../../components/ui/HelpTip'
+import { Plus, Eye, Pencil, Trash2, Grid3X3, Wrench } from 'lucide-react'
+
+interface Filters {
+  search: string
+  type: RuralStructureType | ''
+  status: RuralStructureStatus | ''
+  condition: RuralStructureCondition | ''
+}
+
+const defaultFilters: Filters = {
+  search: '',
+  type: '',
+  status: '',
+  condition: '',
+}
+
+const typeOptions: RuralStructureType[] = [
+  'Cerca',
+  'Corredor',
+  'Porteira',
+]
+
+const statusOptions: RuralStructureStatus[] = [
+  'Em uso',
+  'Em manutenção',
+  'Inativa',
+]
+
+const conditionOptions: RuralStructureCondition[] = [
+  'Boa',
+  'Regular',
+  'Ruim',
+]
+
+export default function RuralStructuresPage() {
+  const navigate = useNavigate()
+  const [structures, setStructures] = useState<RuralStructure[]>([])
+  const [filters, setFilters] = useState<Filters>(defaultFilters)
+  const [error, setError] = useState('')
+
+  const loadData = useCallback(() => {
+    setStructures(getRuralStructures())
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const filtered = useMemo(() => {
+    return structures.filter(structure => {
+      const searchTerm = filters.search.toLowerCase().trim()
+
+      const matchesSearch =
+        !searchTerm ||
+        structure.code.toLowerCase().includes(searchTerm) ||
+        structure.name.toLowerCase().includes(searchTerm)
+
+      const matchesType =
+        !filters.type || structure.type === filters.type
+
+      const matchesStatus =
+        !filters.status || structure.status === filters.status
+
+      const matchesCondition =
+        !filters.condition || structure.condition === filters.condition
+
+      return (
+        matchesSearch &&
+        matchesType &&
+        matchesStatus &&
+        matchesCondition
+      )
+    })
+  }, [structures, filters])
+
+  const handleDelete = (id: string) => {
+    const structure = structures.find(s => s.id === id)
+    if (!structure) return
+
+    if (window.confirm(`Excluir a estrutura ${structure.code}?`)) {
+      try {
+        deleteRuralStructure(id)
+        setError('')
+        loadData()
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Erro ao excluir estrutura.'
+        )
+      }
+    }
+  }
+
+  const summaryCards = [
+    {
+      label: 'Total de estruturas',
+      value: structures.length,
+      icon: Grid3X3,
+      color:
+        'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300',
+    },
+    {
+      label: 'Cercas',
+      value: getRuralStructureCountByType('Cerca'),
+      icon: Grid3X3,
+      color:
+        'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300',
+    },
+    {
+      label: 'Corredores',
+      value: getRuralStructureCountByType('Corredor'),
+      icon: Grid3X3,
+      color:
+        'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300',
+    },
+    {
+      label: 'Porteiras',
+      value: getRuralStructureCountByType('Porteira'),
+      icon: Grid3X3,
+      color:
+        'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300',
+    },
+    {
+      label: 'Em manutenção',
+      value: getRuralStructureCountByStatus('Em manutenção'),
+      icon: Wrench,
+      color:
+        'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300',
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              Estruturas da Propriedade
+            </h1>
+
+            <HelpTip
+              title="Para que serve esta página?"
+              description="Aqui você cadastra e acompanha estruturas rurais como cercas, corredores e porteiras."
+            />
+          </div>
+
+          <p className="text-gray-600 dark:text-gray-400">
+            Gerencie cercas, corredores e porteiras.
+          </p>
+        </div>
+
+        <Button onClick={() => navigate('/terras/estruturas/nova')}>
+          <Plus className="w-4 h-4 mr-2 inline" />
+          Nova estrutura
+        </Button>
+      </div>
+
+      {error && <PageFeedback type="error" message={error} />}
+
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {summaryCards.map(card => {
+          const Icon = card.icon
+
+          return (
+            <Card key={card.label} className="p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {card.label}
+                  </p>
+                  <p className="text-2xl font-bold mt-1">{card.value}</p>
+                </div>
+
+                <div className={`p-2 rounded-lg ${card.color}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+              </div>
+            </Card>
+          )
+        })}
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input
+            type="text"
+            placeholder="Pesquisar código ou nome..."
+            value={filters.search}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                search: e.target.value,
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+
+          <select
+            value={filters.type}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                type: e.target.value as RuralStructureType | '',
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="">Tipo: todos</option>
+            {typeOptions.map(option => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filters.status}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                status: e.target.value as RuralStructureStatus | '',
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="">Situação: todas</option>
+            {statusOptions.map(option => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filters.condition}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                condition: e.target.value as RuralStructureCondition | '',
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="">Conservação: todas</option>
+            {conditionOptions.map(option => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+
+          <button
+            onClick={() => setFilters(defaultFilters)}
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline self-center"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      </div>
+
+      {structures.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            Nenhuma estrutura cadastrada.
+          </p>
+
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Cadastre a primeira estrutura da propriedade.
+          </p>
+
+          <Button
+            className="mt-4"
+            onClick={() => navigate('/terras/estruturas/nova')}
+          >
+            <Plus className="w-4 h-4 mr-2 inline" />
+            Cadastrar primeira estrutura
+          </Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            Nenhuma estrutura encontrada com os filtros selecionados.
+          </p>
+
+          <button
+            onClick={() => setFilters(defaultFilters)}
+            className="mt-2 text-green-600 hover:underline text-sm"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                <tr>
+                  <th className="px-4 py-3">Código</th>
+                  <th className="px-4 py-3">Nome</th>
+                  <th className="px-4 py-3">Tipo</th>
+                  <th className="px-4 py-3">Áreas</th>
+                  <th className="px-4 py-3">Dimensões</th>
+                  <th className="px-4 py-3">Situação</th>
+                  <th className="px-4 py-3">Conservação</th>
+                  <th className="px-4 py-3">Ações</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filtered.map(structure => {
+                  const areas = getLandAreasForStructure(structure)
+
+                  return (
+                    <tr
+                      key={structure.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        {structure.code}
+                      </td>
+                      <td className="px-4 py-3">{structure.name}</td>
+                      <td className="px-4 py-3">{structure.type}</td>
+                      <td className="px-4 py-3">
+                        {areas.length === 0
+                          ? '—'
+                          : areas.map(a => a.code).join(', ')}
+                      </td>
+                      <td className="px-4 py-3">
+                        {structure.lengthMeters || structure.widthMeters
+                          ? `${structure.lengthMeters ?? '—'}m × ${structure.widthMeters ?? '—'}m`
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                            structure.status === 'Em uso'
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                              : structure.status === 'Em manutenção'
+                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+                                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                          }`}
+                        >
+                          {structure.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                            structure.condition === 'Boa'
+                              ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                              : structure.condition === 'Regular'
+                                ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+                                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                          }`}
+                        >
+                          {structure.condition}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() =>
+                              navigate(
+                                `/terras/estruturas/${structure.id}`
+                              )
+                            }
+                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                            aria-label="Visualizar estrutura"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              navigate(
+                                `/terras/estruturas/${structure.id}/editar`
+                              )
+                            }
+                            className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                            aria-label="Editar estrutura"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+
+                          <button
+                            onClick={() => handleDelete(structure.id)}
+                            className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600"
+                            aria-label="Excluir estrutura"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="md:hidden grid grid-cols-1 gap-4">
+            {filtered.map(structure => {
+              const areas = getLandAreasForStructure(structure)
+
+              return (
+                <Card key={structure.id} className="p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium text-sm">
+                        {structure.code}
+                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {structure.name}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                        structure.status === 'Em uso'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                          : structure.status === 'Em manutenção'
+                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                      }`}
+                    >
+                      {structure.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                    <p>Tipo: {structure.type}</p>
+                    <p>
+                      Áreas:{' '}
+                      {areas.length === 0
+                        ? '—'
+                        : areas.map(a => a.code).join(', ')}
+                    </p>
+
+                    {structure.lengthMeters && (
+                      <p>Comprimento: {structure.lengthMeters}m</p>
+                    )}
+
+                    {structure.widthMeters && (
+                      <p>Largura: {structure.widthMeters}m</p>
+                    )}
+
+                    <p>Conservação: {structure.condition}</p>
+                  </div>
+
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        navigate(`/terras/estruturas/${structure.id}`)
+                      }
+                      className="text-xs px-2 py-1"
+                    >
+                      Ver
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        navigate(
+                          `/terras/estruturas/${structure.id}/editar`
+                        )
+                      }
+                      className="text-xs px-2 py-1"
+                    >
+                      Editar
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDelete(structure.id)}
+                      className="text-xs px-2 py-1 text-red-600 border-red-300 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900/30"
+                    >
+                      Excluir
+                    </Button>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/NewRuralStructurePage.tsx
+============================================================
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import RuralStructureForm from '../../components/land/RuralStructureForm'
+import { createRuralStructure } from '../../services/ruralStructureService'
+import { RuralStructure } from '../../types'
+import HelpTip from '../../components/ui/HelpTip'
+
+export default function NewRuralStructurePage() {
+  const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const handleSubmit = (
+    data: Omit<RuralStructure, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
+    setSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const structure = createRuralStructure(data)
+
+      navigate(`/terras/estruturas/${structure.id}`, {
+        state: {
+          successMessage: 'Estrutura cadastrada com sucesso.',
+        },
+      })
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao cadastrar estrutura.'
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold">Nova estrutura</h1>
+
+          <HelpTip
+            title="O que devo fazer aqui?"
+            description="Preencha as informações abaixo para cadastrar uma nova estrutura rural, como cerca, corredor ou porteira."
+          />
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Cadastre uma nova estrutura da propriedade
+        </p>
+      </div>
+
+      <RuralStructureForm
+        onSubmit={handleSubmit}
+        onCancel={() => navigate('/terras/estruturas')}
+        submitting={submitting}
+        submitError={submitError}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/RuralStructureDetailsPage.tsx
+============================================================
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import {
+  getRuralStructureById,
+  deleteRuralStructure,
+  getLandAreasForStructure,
+} from '../../services/ruralStructureService'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import PageFeedback from '../../components/ui/PageFeedback'
+import HelpTip from '../../components/ui/HelpTip'
+import { Pencil, Trash2, ArrowLeft } from 'lucide-react'
+
+export default function RuralStructureDetailsPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [deleteError, setDeleteError] = useState('')
+  const [successMessage, setSuccessMessage] = useState<string | null>(
+    null
+  )
+
+  const structure = id
+    ? getRuralStructureById(id)
+    : undefined
+
+  const linkedAreas = structure
+    ? getLandAreasForStructure(structure)
+    : []
+
+  useEffect(() => {
+    const state = location.state as {
+      successMessage?: string
+    } | null
+
+    if (!state?.successMessage) return
+
+    setSuccessMessage(state.successMessage)
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    })
+  }, [location.pathname, location.state, navigate])
+
+  useEffect(() => {
+    if (!successMessage) return
+
+    const timer = setTimeout(
+      () => setSuccessMessage(null),
+      5000
+    )
+
+    return () => clearTimeout(timer)
+  }, [successMessage])
+
+  if (!structure) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+          Estrutura não encontrada
+        </p>
+
+        <Button
+          className="mt-4"
+          onClick={() => navigate('/terras/estruturas')}
+        >
+          Voltar para estruturas
+        </Button>
+      </div>
+    )
+  }
+
+  const handleDelete = () => {
+    if (window.confirm(`Excluir a estrutura ${structure.code}?`)) {
+      try {
+        deleteRuralStructure(structure.id)
+        navigate('/terras/estruturas')
+      } catch (error) {
+        setDeleteError(
+          error instanceof Error
+            ? error.message
+            : 'Erro ao excluir estrutura.'
+        )
+      }
+    }
+  }
+
+  const statusClass =
+    structure.status === 'Em uso'
+      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      : structure.status === 'Em manutenção'
+        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+        : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+
+  const conditionClass =
+    structure.condition === 'Boa'
+      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+      : structure.condition === 'Regular'
+        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300'
+        : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+
+  return (
+    <div className="space-y-6">
+      {successMessage && (
+        <PageFeedback
+          type="success"
+          message={successMessage}
+        />
+      )}
+
+      {deleteError && (
+        <PageFeedback
+          type="error"
+          message={deleteError}
+        />
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <button
+            onClick={() => navigate('/terras/estruturas')}
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1 mb-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar para estruturas
+          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              {structure.code}
+            </h1>
+
+            <HelpTip
+              title="O que encontro nesta página?"
+              description="Aqui você consulta os dados desta estrutura e as áreas vinculadas a ela."
+            />
+          </div>
+
+          <p className="text-lg text-gray-600 dark:text-gray-400">
+            {structure.name}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() =>
+              navigate(
+                `/terras/estruturas/${structure.id}/editar`
+              )
+            }
+          >
+            <Pencil className="w-4 h-4 mr-2 inline" />
+            Editar
+          </Button>
+
+          <Button
+            variant="outline"
+            className="text-red-600 border-red-300 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900/30"
+            onClick={handleDelete}
+          >
+            <Trash2 className="w-4 h-4 mr-2 inline" />
+            Excluir
+          </Button>
+        </div>
+      </div>
+
+      <Card className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Código
+            </p>
+            <p className="font-medium">{structure.code}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Nome
+            </p>
+            <p className="font-medium">{structure.name}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Tipo
+            </p>
+            <p className="font-medium">{structure.type}</p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Situação
+            </p>
+
+            <span
+              className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${statusClass}`}
+            >
+              {structure.status}
+            </span>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Conservação
+            </p>
+
+            <span
+              className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${conditionClass}`}
+            >
+              {structure.condition}
+            </span>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Comprimento
+            </p>
+            <p className="font-medium">
+              {structure.lengthMeters
+                ? `${structure.lengthMeters} m`
+                : 'Não informado'}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Largura
+            </p>
+            <p className="font-medium">
+              {structure.widthMeters
+                ? `${structure.widthMeters} m`
+                : 'Não informada'}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Data de cadastro
+            </p>
+            <p className="font-medium">
+              {new Date(
+                structure.createdAt
+              ).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Última atualização
+            </p>
+            <p className="font-medium">
+              {new Date(
+                structure.updatedAt
+              ).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+        </div>
+
+        {structure.description && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Descrição
+            </p>
+            <p className="mt-1">{structure.description}</p>
+          </div>
+        )}
+
+        <div className="mt-6">
+          <p className="text-sm font-medium mb-2">
+            Áreas vinculadas
+          </p>
+
+          {linkedAreas.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Nenhuma área vinculada.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {linkedAreas.map(area => (
+                <button
+                  key={area.id}
+                  onClick={() => navigate(`/terras/${area.id}`)}
+                  className="block w-full text-left p-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                >
+                  {area.code} — {area.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/EditRuralStructurePage.tsx
+============================================================
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import RuralStructureForm from '../../components/land/RuralStructureForm'
+import {
+  getRuralStructureById,
+  updateRuralStructure,
+} from '../../services/ruralStructureService'
+import { RuralStructure } from '../../types'
+import HelpTip from '../../components/ui/HelpTip'
+
+export default function EditRuralStructurePage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const structure = id
+    ? getRuralStructureById(id)
+    : undefined
+
+  if (!structure) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+          Estrutura não encontrada
+        </p>
+
+        <button
+          onClick={() => navigate('/terras/estruturas')}
+          className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+        >
+          Voltar para estruturas
+        </button>
+      </div>
+    )
+  }
+
+  const handleSubmit = (
+    data: Omit<RuralStructure, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
+    setSubmitting(true)
+    setSubmitError('')
+
+    try {
+      updateRuralStructure(structure.id, data)
+
+      navigate(`/terras/estruturas/${structure.id}`, {
+        state: {
+          successMessage: 'Estrutura atualizada com sucesso.',
+        },
+      })
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao atualizar estrutura.'
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold">
+            Editar estrutura
+          </h1>
+
+          <HelpTip
+            title="Para que serve esta página?"
+            description="Aqui você pode atualizar as informações desta estrutura. As alterações serão salvas no cadastro existente."
+          />
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Atualize os dados de {structure.code}
+        </p>
+      </div>
+
+      <RuralStructureForm
+        structure={structure}
+        onSubmit={handleSubmit}
+        onCancel={() =>
+          navigate(`/terras/estruturas/${structure.id}`)
+        }
+        submitting={submitting}
+        submitError={submitError}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/LandUseHistoryPage.tsx
+============================================================
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  getLandUseRecords,
+  deleteLandUseRecord,
+} from '../../services/landUseService'
+import { getLandAreas } from '../../services/landService'
+import {
+  LandUseRecord,
+  LandUseType,
+  LandArea,
+} from '../../types'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import PageFeedback from '../../components/ui/PageFeedback'
+import HelpTip from '../../components/ui/HelpTip'
+import { Plus, Eye, Pencil, Trash2 } from 'lucide-react'
+
+interface Filters {
+  search: string
+  landAreaId: string
+  type: LandUseType | ''
+  temporal: 'Todos' | 'Em andamento' | 'Finalizados'
+}
+
+const defaultFilters: Filters = {
+  search: '',
+  landAreaId: '',
+  type: '',
+  temporal: 'Todos',
+}
+
+const landUseTypeOptions: LandUseType[] = [
+  'Uso produtivo',
+  'Descanso',
+  'Recuperação',
+  'Preservação',
+  'Manutenção',
+  'Outro',
+]
+
+const temporalOptions = [
+  'Todos',
+  'Em andamento',
+  'Finalizados',
+]
+
+export default function LandUseHistoryPage() {
+  const navigate = useNavigate()
+  const [records, setRecords] = useState<LandUseRecord[]>([])
+  const [areas, setAreas] = useState<LandArea[]>([])
+  const [filters, setFilters] = useState<Filters>(defaultFilters)
+  const [error, setError] = useState('')
+
+  const loadData = useCallback(() => {
+    setRecords(getLandUseRecords())
+    setAreas(getLandAreas())
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const filtered = useMemo(() => {
+    return records.filter(record => {
+      const area = areas.find(
+        a => a.id === record.landAreaId
+      )
+
+      const searchTerm =
+        filters.search.toLowerCase().trim()
+
+      const matchesSearch =
+        !searchTerm ||
+        (area?.code
+          .toLowerCase()
+          .includes(searchTerm) ??
+          false) ||
+        (area?.name
+          .toLowerCase()
+          .includes(searchTerm) ??
+          false) ||
+        record.type
+          .toLowerCase()
+          .includes(searchTerm) ||
+        (record.description
+          ?.toLowerCase()
+          .includes(searchTerm) ??
+          false)
+
+      const matchesArea =
+        !filters.landAreaId ||
+        record.landAreaId ===
+          filters.landAreaId
+
+      const matchesType =
+        !filters.type ||
+        record.type === filters.type
+
+      const matchesTemporal =
+        filters.temporal === 'Todos' ||
+        (filters.temporal ===
+          'Em andamento' &&
+          !record.endDate) ||
+        (filters.temporal ===
+          'Finalizados' &&
+          !!record.endDate)
+
+      return (
+        matchesSearch &&
+        matchesArea &&
+        matchesType &&
+        matchesTemporal
+      )
+    })
+  }, [records, areas, filters])
+
+  const handleDelete = (id: string) => {
+    const record = records.find(
+      r => r.id === id
+    )
+
+    if (!record) return
+
+    if (
+      window.confirm(
+        'Excluir este registro de utilização?'
+      )
+    ) {
+      try {
+        deleteLandUseRecord(id)
+        setError('')
+        loadData()
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Erro ao excluir registro.'
+        )
+      }
+    }
+  }
+
+  const formatDate = (date?: string) => {
+    if (!date) return '—'
+
+    return new Date(
+      date + 'T00:00:00'
+    ).toLocaleDateString('pt-BR')
+  }
+
+  const getAreaLabel = (
+    record: LandUseRecord
+  ): string => {
+    const area = areas.find(
+      a => a.id === record.landAreaId
+    )
+
+    if (!area) return 'Área não encontrada'
+
+    return `${area.code} — ${area.name}`
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              Histórico de Utilização das Áreas
+            </h1>
+
+            <HelpTip
+              title="Para que serve esta página?"
+              description="Aqui você consulta como as áreas da propriedade foram utilizadas ao longo do tempo."
+            />
+          </div>
+
+          <p className="text-gray-600 dark:text-gray-400">
+            Registre e consulte como as áreas foram
+            utilizadas ao longo do tempo.
+          </p>
+        </div>
+
+        <Button
+          onClick={() =>
+            navigate('/terras/historico/novo')
+          }
+        >
+          <Plus className="w-4 h-4 mr-2 inline" />
+          Novo registro
+        </Button>
+      </div>
+
+      {error && (
+        <PageFeedback
+          type="error"
+          message={error}
+        />
+      )}
+
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <input
+            type="text"
+            placeholder="Pesquisar código, nome, tipo ou descrição..."
+            value={filters.search}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                search: e.target.value,
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+
+          <select
+            value={filters.landAreaId}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                landAreaId: e.target.value,
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="">Área: todas</option>
+
+            {areas.map(area => (
+              <option
+                key={area.id}
+                value={area.id}
+              >
+                {area.code} — {area.name}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filters.type}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                type:
+                  e.target.value as
+                    | LandUseType
+                    | '',
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            <option value="">
+              Tipo: todos
+            </option>
+
+            {landUseTypeOptions.map(
+              option => (
+                <option
+                  key={option}
+                  value={option}
+                >
+                  {option}
+                </option>
+              )
+            )}
+          </select>
+
+          <select
+            value={filters.temporal}
+            onChange={e =>
+              setFilters(prev => ({
+                ...prev,
+                temporal:
+                  e.target
+                    .value as Filters['temporal'],
+              }))
+            }
+            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+          >
+            {temporalOptions.map(
+              option => (
+                <option
+                  key={option}
+                  value={option}
+                >
+                  {option}
+                </option>
+              )
+            )}
+          </select>
+
+          <button
+            onClick={() =>
+              setFilters(defaultFilters)
+            }
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline self-center"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      </div>
+
+      {records.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            Nenhum registro de utilização cadastrado.
+          </p>
+
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            Registre o primeiro histórico de utilização
+            de uma área.
+          </p>
+
+          <Button
+            className="mt-4"
+            onClick={() =>
+              navigate('/terras/historico/novo')
+            }
+          >
+            <Plus className="w-4 h-4 mr-2 inline" />
+            Cadastrar primeiro registro
+          </Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12">
+          <p className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+            Nenhum registro encontrado com os filtros
+            selecionados.
+          </p>
+
+          <button
+            onClick={() =>
+              setFilters(defaultFilters)
+            }
+            className="mt-2 text-green-600 hover:underline text-sm"
+          >
+            Limpar filtros
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                <tr>
+                  <th className="px-4 py-3">
+                    Área
+                  </th>
+                  <th className="px-4 py-3">
+                    Tipo
+                  </th>
+                  <th className="px-4 py-3">
+                    Início
+                  </th>
+                  <th className="px-4 py-3">
+                    Término
+                  </th>
+                  <th className="px-4 py-3">
+                    Situação
+                  </th>
+                  <th className="px-4 py-3">
+                    Descrição
+                  </th>
+                  <th className="px-4 py-3">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filtered.map(record => (
+                  <tr
+                    key={record.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                  >
+                    <td className="px-4 py-3 font-medium">
+                      {getAreaLabel(record)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {record.type}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {formatDate(
+                        record.startDate
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {formatDate(
+                        record.endDate
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {record.endDate ? (
+                        <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                          Finalizado
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                          Em andamento
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      {record.description ??
+                        '—'}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() =>
+                            navigate(
+                              `/terras/historico/${record.id}`
+                            )
+                          }
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                          aria-label="Visualizar registro"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            navigate(
+                              `/terras/historico/${record.id}/editar`
+                            )
+                          }
+                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                          aria-label="Editar registro"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            handleDelete(
+                              record.id
+                            )
+                          }
+                          className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-red-600"
+                          aria-label="Excluir registro"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="md:hidden grid grid-cols-1 gap-4">
+            {filtered.map(record => (
+              <Card
+                key={record.id}
+                className="p-4"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-medium text-sm">
+                      {getAreaLabel(record)}
+                    </p>
+
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {record.type}
+                    </p>
+                  </div>
+
+                  {record.endDate ? (
+                    <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                      Finalizado
+                    </span>
+                  ) : (
+                    <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                      Em andamento
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                  <p>
+                    Início:{' '}
+                    {formatDate(
+                      record.startDate
+                    )}
+                  </p>
+
+                  {record.endDate && (
+                    <p>
+                      Término:{' '}
+                      {formatDate(
+                        record.endDate
+                      )}
+                    </p>
+                  )}
+
+                  {record.description && (
+                    <p>
+                      Descrição:{' '}
+                      {record.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      navigate(
+                        `/terras/historico/${record.id}`
+                      )
+                    }
+                    className="text-xs px-2 py-1"
+                  >
+                    Ver
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      navigate(
+                        `/terras/historico/${record.id}/editar`
+                      )
+                    }
+                    className="text-xs px-2 py-1"
+                  >
+                    Editar
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      handleDelete(
+                        record.id
+                      )
+                    }
+                    className="text-xs px-2 py-1 text-red-600 border-red-300 hover:bg-red-50 dark:border-red-700 dark:hover:bg-red-900/30"
+                  >
+                    Excluir
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/NewLandUseRecordPage.tsx
+============================================================
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import LandUseForm from '../../components/land/LandUseForm'
+import { createLandUseRecord } from '../../services/landUseService'
+import { LandUseRecord } from '../../types'
+import HelpTip from '../../components/ui/HelpTip'
+
+export default function NewLandUseRecordPage() {
+  const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const handleSubmit = (
+    data: Omit<LandUseRecord, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
+    setSubmitting(true)
+    setSubmitError('')
+
+    try {
+      const record = createLandUseRecord(data)
+
+      navigate(`/terras/historico/${record.id}`, {
+        state: {
+          successMessage:
+            'Registro de utilização criado com sucesso.',
+        },
+      })
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao criar registro.'
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold">
+            Novo registro de utilização
+          </h1>
+
+          <HelpTip
+            title="O que devo fazer aqui?"
+            description="Registre como uma área foi utilizada ou manejada em um determinado período."
+          />
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Registre como uma área foi utilizada ou manejada.
+        </p>
+      </div>
+
+      <LandUseForm
+        onSubmit={handleSubmit}
+        onCancel={() =>
+          navigate('/terras/historico')
+        }
+        submitting={submitting}
+        submitError={submitError}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/LandUseRecordDetailsPage.tsx
+============================================================
+import { useState, useEffect } from 'react'
+import {
+  useParams,
+  useNavigate,
+  useLocation,
+  Link,
+} from 'react-router-dom'
+import { getLandUseRecordById } from '../../services/landUseService'
+import { getLandAreaById } from '../../services/landService'
+import Card from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
+import PageFeedback from '../../components/ui/PageFeedback'
+import HelpTip from '../../components/ui/HelpTip'
+import { Pencil, ArrowLeft } from 'lucide-react'
+
+export default function LandUseRecordDetailsPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [successMessage, setSuccessMessage] = useState<string | null>(
+    null
+  )
+
+  const record = id
+    ? getLandUseRecordById(id)
+    : undefined
+
+  const area = record
+    ? getLandAreaById(record.landAreaId)
+    : undefined
+
+  useEffect(() => {
+    const state = location.state as {
+      successMessage?: string
+    } | null
+
+    if (!state?.successMessage) return
+
+    setSuccessMessage(state.successMessage)
+
+    navigate(location.pathname, {
+      replace: true,
+      state: null,
+    })
+  }, [location.pathname, location.state, navigate])
+
+  useEffect(() => {
+    if (!successMessage) return
+
+    const timer = setTimeout(
+      () => setSuccessMessage(null),
+      5000
+    )
+
+    return () => clearTimeout(timer)
+  }, [successMessage])
+
+  if (!record) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+          Registro de utilização não encontrado
+        </p>
+
+        <Button
+          className="mt-4"
+          onClick={() =>
+            navigate('/terras/historico')
+          }
+        >
+          Voltar para histórico
+        </Button>
+      </div>
+    )
+  }
+
+  const formatDate = (date?: string) => {
+    if (!date) return 'Não informada'
+
+    return new Date(
+      date + 'T00:00:00'
+    ).toLocaleDateString('pt-BR')
+  }
+
+  return (
+    <div className="space-y-6">
+      {successMessage && (
+        <PageFeedback
+          type="success"
+          message={successMessage}
+        />
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <button
+            onClick={() =>
+              navigate('/terras/historico')
+            }
+            className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 flex items-center gap-1 mb-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Voltar para histórico
+          </button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              Registro de utilização
+            </h1>
+
+            <HelpTip
+              title="O que encontro nesta página?"
+              description="Aqui você consulta os dados deste registro de utilização, com área, tipo, período e observações."
+            />
+          </div>
+
+          <p className="text-lg text-gray-600 dark:text-gray-400">
+            {record.type}
+          </p>
+        </div>
+
+        <Button
+          variant="outline"
+          onClick={() =>
+            navigate(
+              `/terras/historico/${record.id}/editar`
+            )
+          }
+        >
+          <Pencil className="w-4 h-4 mr-2 inline" />
+          Editar
+        </Button>
+      </div>
+
+      <Card className="p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Área
+            </p>
+
+            {area ? (
+              <Link
+                to={`/terras/${area.id}`}
+                className="font-medium text-green-600 hover:underline"
+              >
+                {area.code} — {area.name}
+              </Link>
+            ) : (
+              <p className="font-medium text-gray-700 dark:text-gray-300">
+                Área não encontrada
+              </p>
+            )}
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Tipo de utilização
+            </p>
+            <p className="font-medium">
+              {record.type}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Data de início
+            </p>
+            <p className="font-medium">
+              {formatDate(record.startDate)}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Data de término
+            </p>
+            <p className="font-medium">
+              {formatDate(record.endDate)}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Situação
+            </p>
+
+            {record.endDate ? (
+              <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                Finalizado
+              </span>
+            ) : (
+              <span className="inline-block px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                Em andamento
+              </span>
+            )}
+          </div>
+        </div>
+
+        {record.description && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Descrição
+            </p>
+            <p className="mt-1">
+              {record.description}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Data de cadastro
+            </p>
+            <p className="font-medium">
+              {new Date(
+                record.createdAt
+              ).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Última atualização
+            </p>
+            <p className="font-medium">
+              {new Date(
+                record.updatedAt
+              ).toLocaleDateString('pt-BR')}
+            </p>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/pages/land/EditLandUseRecordPage.tsx
+============================================================
+import { useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import LandUseForm from '../../components/land/LandUseForm'
+import {
+  getLandUseRecordById,
+  updateLandUseRecord,
+} from '../../services/landUseService'
+import { LandUseRecord } from '../../types'
+import HelpTip from '../../components/ui/HelpTip'
+
+export default function EditLandUseRecordPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const record = id
+    ? getLandUseRecordById(id)
+    : undefined
+
+  if (!record) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+          Registro de utilização não encontrado
+        </p>
+
+        <button
+          onClick={() =>
+            navigate('/terras/historico')
+          }
+          className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+        >
+          Voltar para histórico
+        </button>
+      </div>
+    )
+  }
+
+  const handleSubmit = (
+    data: Omit<LandUseRecord, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
+    setSubmitting(true)
+    setSubmitError('')
+
+    try {
+      updateLandUseRecord(record.id, data)
+
+      navigate(`/terras/historico/${record.id}`, {
+        state: {
+          successMessage:
+            'Registro atualizado com sucesso.',
+        },
+      })
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : 'Erro ao atualizar registro.'
+      )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold">
+            Editar registro de utilização
+          </h1>
+
+          <HelpTip
+            title="Para que serve esta página?"
+            description="Aqui você pode atualizar as informações deste registro. As alterações serão salvas no cadastro existente."
+          />
+        </div>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Atualize os dados do registro.
+        </p>
+      </div>
+
+      <LandUseForm
+        record={record}
+        onSubmit={handleSubmit}
+        onCancel={() =>
+          navigate(
+            `/terras/historico/${record.id}`
+          )
+        }
+        submitting={submitting}
+        submitError={submitError}
+      />
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/components/land/LandAreaForm.tsx
+============================================================
+import { useState, FormEvent, ChangeEvent } from 'react'
+import { LandArea, LandAreaType, LandAreaStatus } from '../../types'
+import Button from '../ui/Button'
+import Input from '../ui/Input'
+import Card from '../ui/Card'
+import HelpTip from '../ui/HelpTip'
+
+interface LandAreaFormData {
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: string
+  purpose: string
+  status: LandAreaStatus
+  description: string
+}
+
+interface Props {
+  area?: LandArea
+  onSubmit: (
+    data: Omit<LandArea, 'id' | 'createdAt' | 'updatedAt'>
+  ) => void
+  onCancel: () => void
+  submitting?: boolean
+  submitError?: string
+}
+
+const typeOptions: LandAreaType[] = [
+  'Piquete',
+  'Talhão',
+  'Pastagem',
+  'Reserva/APP',
+  'Infraestrutura',
+  'Área ociosa',
+  'Outro',
+]
+
+const statusOptions: LandAreaStatus[] = [
+  'Em uso',
+  'Em descanso',
+  'Em recuperação',
+  'Inativa',
+]
+
+export default function LandAreaForm({
+  area,
+  onSubmit,
+  onCancel,
+  submitting,
+  submitError,
+}: Props) {
+  const [formData, setFormData] = useState<LandAreaFormData>(() => {
+    if (area) {
+      return {
+        code: area.code,
+        name: area.name,
+        type: area.type,
+        areaHectares: area.areaHectares.toString(),
+        purpose: area.purpose ?? '',
+        status: area.status,
+        description: area.description ?? '',
+      }
+    }
+
+    return {
+      code: '',
+      name: '',
+      type: 'Piquete',
+      areaHectares: '',
+      purpose: '',
+      status: 'Em uso',
+      description: '',
+    }
+  })
+
+  const [errors, setErrors] = useState<
+    Partial<Record<keyof LandAreaFormData, string>>
+  >({})
+
+  const handleChange = (
+    e: ChangeEvent<
+      HTMLInputElement |
+      HTMLSelectElement |
+      HTMLTextAreaElement
+    >
+  ) => {
+    const { name, value } = e.target
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }))
+
+    if (errors[name as keyof LandAreaFormData]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: undefined,
+      }))
+    }
+  }
+
+  const validate = (): boolean => {
+    const newErrors: Partial<
+      Record<
+        keyof LandAreaFormData,
+        string
+      >
+    > = {}
+
+    if (!formData.code.trim()) {
+      newErrors.code = 'Código é obrigatório'
+    }
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Nome é obrigatório'
+    }
+
+    if (!formData.type) {
+      newErrors.type = 'Tipo é obrigatório'
+    }
+
+    if (!formData.areaHectares) {
+      newErrors.areaHectares =
+        'Área em hectares é obrigatória'
+    } else {
+      const areaValue =
+        parseFloat(
+          formData.areaHectares
+        )
+
+      if (
+        !Number.isFinite(areaValue) ||
+        areaValue <= 0
+      ) {
+        newErrors.areaHectares =
+          'Área deve ser maior que zero'
+      }
+    }
+
+    if (!formData.status) {
+      newErrors.status =
+        'Situação é obrigatória'
+    }
+
+    setErrors(newErrors)
+
+    return (
+      Object.keys(newErrors).length === 0
+    )
+  }
+
+  const handleSubmit = (
+    e: FormEvent
+  ) => {
+    e.preventDefault()
+
+    if (!validate()) return
+
+    const payload: Omit<
+      LandArea,
+      'id' | 'createdAt' | 'updatedAt'
+    > = {
+      code: formData.code.trim(),
+      name: formData.name.trim(),
+      type: formData.type,
+      areaHectares:
+        parseFloat(
+          formData.areaHectares
+        ),
+      purpose:
+        formData.purpose.trim() ||
+        undefined,
+      status: formData.status,
+      description:
+        formData.description.trim() ||
+        undefined,
+    }
+
+    onSubmit(payload)
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <Card className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Input
+              label="Código *"
+              name="code"
+              value={formData.code}
+              onChange={handleChange}
+              placeholder="Ex: PIQ-001"
+              required
+            />
+
+            {errors.code && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.code}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Nome *"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="Ex: Piquete 01"
+              required
+            />
+
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.name}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-1 mb-1">
+              <label
+                htmlFor="land-area-type"
+                className="block text-sm font-medium"
+              >
+                Tipo *
+              </label>
+
+              <HelpTip
+                title="Como escolher o tipo da área?"
+                description="Use Talhão para áreas de cultivo, Piquete para áreas de manejo de animais e escolha os outros tipos conforme o uso real da área na propriedade."
+              />
+            </div>
+
+            <select
+              id="land-area-type"
+              name="type"
+              value={formData.type}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {typeOptions.map(option => (
+                <option
+                  key={option}
+                  value={option}
+                >
+                  {option}
+                </option>
+              ))}
+            </select>
+
+            {errors.type && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.type}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Área (ha) *"
+              name="areaHectares"
+              type="number"
+              min="0"
+              step="any"
+              value={formData.areaHectares}
+              onChange={handleChange}
+              placeholder="Ex: 12.5"
+              required
+            />
+
+            {errors.areaHectares && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.areaHectares}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Finalidade"
+              name="purpose"
+              value={formData.purpose}
+              onChange={handleChange}
+              placeholder="Ex: Pastejo rotacionado"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Situação *
+            </label>
+
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {statusOptions.map(option => (
+                <option
+                  key={option}
+                  value={option}
+                >
+                  {option}
+                </option>
+              ))}
+            </select>
+
+            {errors.status && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.status}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="block text-sm font-medium mb-1">
+            Descrição / Observações
+          </label>
+
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 resize-y"
+            placeholder="Informações adicionais (opcional)"
+          />
+        </div>
+
+        {submitError && (
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
+            {submitError}
+          </div>
+        )}
+      </Card>
+
+      <div className="mt-6 flex gap-3">
+        <Button
+          type="submit"
+          disabled={submitting}
+        >
+          {submitting
+            ? 'Salvando...'
+            : 'Salvar'}
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+        >
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+============================================================
+ARQUIVO: src/components/land/LandAreaStatusBadge.tsx
+============================================================
+import { LandAreaStatus } from '../../types'
+import Badge from '../ui/Badge'
+
+interface Props {
+  status: LandAreaStatus
+}
+
+export default function LandAreaStatusBadge({
+  status,
+}: Props) {
+  switch (status) {
+    case 'Em uso':
+      return (
+        <Badge variant="success">
+          Em uso
+        </Badge>
+      )
+
+    case 'Em descanso':
+      return (
+        <Badge variant="info">
+          Em descanso
+        </Badge>
+      )
+
+    case 'Em recuperação':
+      return (
+        <Badge variant="warning">
+          Em recuperação
+        </Badge>
+      )
+
+    case 'Inativa':
+      return (
+        <Badge variant="danger">
+          Inativa
+        </Badge>
+      )
+
+    default:
+      return (
+        <Badge variant="info">
+          {status}
+        </Badge>
+      )
+  }
+}
+
+============================================================
+ARQUIVO: src/components/land/RuralStructureForm.tsx
+============================================================
+import { useState, FormEvent, ChangeEvent, useMemo } from 'react'
+import {
+  RuralStructure,
+  RuralStructureType,
+  RuralStructureStatus,
+  RuralStructureCondition,
+} from '../../types'
+import { getLandAreas } from '../../services/landService'
+import Button from '../ui/Button'
+import Input from '../ui/Input'
+import Card from '../ui/Card'
+import HelpTip from '../ui/HelpTip'
+
+interface RuralStructureFormData {
+  code: string
+  name: string
+  type: RuralStructureType
+  landAreaIds: string[]
+  status: RuralStructureStatus
+  condition: RuralStructureCondition
+  lengthMeters: string
+  widthMeters: string
+  description: string
+}
+
+interface Props {
+  structure?: RuralStructure
+  onSubmit: (
+    data: Omit<
+      RuralStructure,
+      'id' | 'createdAt' | 'updatedAt'
+    >
+  ) => void
+  onCancel: () => void
+  submitting?: boolean
+  submitError?: string
+}
+
+const typeOptions: RuralStructureType[] = [
+  'Cerca',
+  'Corredor',
+  'Porteira',
+]
+
+const statusOptions: RuralStructureStatus[] = [
+  'Em uso',
+  'Em manutenção',
+  'Inativa',
+]
+
+const conditionOptions: RuralStructureCondition[] = [
+  'Boa',
+  'Regular',
+  'Ruim',
+]
+
+export default function RuralStructureForm({
+  structure,
+  onSubmit,
+  onCancel,
+  submitting,
+  submitError,
+}: Props) {
+  const [formData, setFormData] =
+    useState<RuralStructureFormData>(() => {
+      if (structure) {
+        return {
+          code: structure.code,
+          name: structure.name,
+          type: structure.type,
+          landAreaIds:
+            structure.landAreaIds,
+          status: structure.status,
+          condition:
+            structure.condition,
+          lengthMeters:
+            structure.lengthMeters?.toString() ??
+            '',
+          widthMeters:
+            structure.widthMeters?.toString() ??
+            '',
+          description:
+            structure.description ?? '',
+        }
+      }
+
+      return {
+        code: '',
+        name: '',
+        type: 'Cerca',
+        landAreaIds: [],
+        status: 'Em uso',
+        condition: 'Boa',
+        lengthMeters: '',
+        widthMeters: '',
+        description: '',
+      }
+    })
+
+  const [errors, setErrors] =
+    useState<
+      Partial<
+        Record<
+          keyof RuralStructureFormData,
+          string
+        >
+      >
+    >({})
+
+  const landAreas = useMemo(
+    () => getLandAreas(),
+    []
+  )
+
+  const handleChange = (
+    e: ChangeEvent<
+      | HTMLInputElement
+      | HTMLSelectElement
+      | HTMLTextAreaElement
+    >
+  ) => {
+    const { name, value } = e.target
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }))
+
+    if (
+      errors[
+        name as keyof RuralStructureFormData
+      ]
+    ) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: undefined,
+      }))
+    }
+  }
+
+  const handleAreaToggle = (
+    areaId: string
+  ) => {
+    setFormData(prev => {
+      const alreadySelected =
+        prev.landAreaIds.includes(areaId)
+
+      return {
+        ...prev,
+        landAreaIds:
+          alreadySelected
+            ? prev.landAreaIds.filter(
+                id => id !== areaId
+              )
+            : [
+                ...prev.landAreaIds,
+                areaId,
+              ],
+      }
+    })
+  }
+
+  const validate = (): boolean => {
+    const newErrors: Partial<
+      Record<
+        keyof RuralStructureFormData,
+        string
+      >
+    > = {}
+
+    if (!formData.code.trim()) {
+      newErrors.code =
+        'Código é obrigatório'
+    }
+
+    if (!formData.name.trim()) {
+      newErrors.name =
+        'Nome é obrigatório'
+    }
+
+    if (!formData.type) {
+      newErrors.type =
+        'Tipo é obrigatório'
+    }
+
+    if (!formData.status) {
+      newErrors.status =
+        'Situação é obrigatória'
+    }
+
+    if (!formData.condition) {
+      newErrors.condition =
+        'Estado de conservação é obrigatório'
+    }
+
+    if (formData.lengthMeters) {
+      const length = parseFloat(
+        formData.lengthMeters
+      )
+
+      if (
+        !Number.isFinite(length) ||
+        length <= 0
+      ) {
+        newErrors.lengthMeters =
+          'Comprimento deve ser maior que zero'
+      }
+    }
+
+    if (formData.widthMeters) {
+      const width = parseFloat(
+        formData.widthMeters
+      )
+
+      if (
+        !Number.isFinite(width) ||
+        width <= 0
+      ) {
+        newErrors.widthMeters =
+          'Largura deve ser maior que zero'
+      }
+    }
+
+    setErrors(newErrors)
+
+    return (
+      Object.keys(newErrors).length ===
+      0
+    )
+  }
+
+  const handleSubmit = (
+    e: FormEvent
+  ) => {
+    e.preventDefault()
+
+    if (!validate()) return
+
+    const payload: Omit<
+      RuralStructure,
+      'id' | 'createdAt' | 'updatedAt'
+    > = {
+      code: formData.code.trim(),
+      name: formData.name.trim(),
+      type: formData.type,
+      landAreaIds:
+        formData.landAreaIds,
+      status: formData.status,
+      condition: formData.condition,
+      lengthMeters:
+        formData.lengthMeters
+          ? parseFloat(
+              formData.lengthMeters
+            )
+          : undefined,
+      widthMeters:
+        formData.widthMeters
+          ? parseFloat(
+              formData.widthMeters
+            )
+          : undefined,
+      description:
+        formData.description.trim() ||
+        undefined,
+    }
+
+    onSubmit(payload)
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <Card className="p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Input
+              label="Código *"
+              name="code"
+              value={formData.code}
+              onChange={handleChange}
+              placeholder="Ex: CER-001"
+              required
+            />
+
+            {errors.code && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.code}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Nome *"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="Ex: Cerca divisória do piquete 1"
+              required
+            />
+
+            {errors.name && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.name}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Tipo *
+            </label>
+
+            <select
+              name="type"
+              value={formData.type}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {typeOptions.map(option => (
+                <option
+                  key={option}
+                  value={option}
+                >
+                  {option}
+                </option>
+              ))}
+            </select>
+
+            {errors.type && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.type}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Situação *
+            </label>
+
+            <select
+              name="status"
+              value={formData.status}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {statusOptions.map(
+                option => (
+                  <option
+                    key={option}
+                    value={option}
+                  >
+                    {option}
+                  </option>
+                )
+              )}
+            </select>
+
+            {errors.status && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.status}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Estado de conservação *
+            </label>
+
+            <select
+              name="condition"
+              value={formData.condition}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {conditionOptions.map(
+                option => (
+                  <option
+                    key={option}
+                    value={option}
+                  >
+                    {option}
+                  </option>
+                )
+              )}
+            </select>
+
+            {errors.condition && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.condition}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Comprimento (m)"
+              name="lengthMeters"
+              type="number"
+              min="0"
+              step="any"
+              value={
+                formData.lengthMeters
+              }
+              onChange={handleChange}
+              placeholder="Ex: 120.5"
+            />
+
+            {errors.lengthMeters && (
+              <p className="mt-1 text-sm text-red-600">
+                {
+                  errors.lengthMeters
+                }
+              </p>
+            )}
+          </div>
+
+          <div>
+            <Input
+              label="Largura (m)"
+              name="widthMeters"
+              type="number"
+              min="0"
+              step="any"
+              value={
+                formData.widthMeters
+              }
+              onChange={handleChange}
+              placeholder="Ex: 4.2"
+            />
+
+            {errors.widthMeters && (
+              <p className="mt-1 text-sm text-red-600">
+                {
+                  errors.widthMeters
+                }
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <div className="flex items-center gap-1 mb-2">
+            <p className="text-sm font-medium">
+              Áreas vinculadas
+            </p>
+
+            <HelpTip
+              title="O que são áreas vinculadas?"
+              description="São as áreas da propriedade relacionadas a esta estrutura, como os piquetes ou talhões ligados por uma cerca, corredor ou porteira."
+            />
+          </div>
+
+          {landAreas.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Nenhuma área cadastrada.
+            </p>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-lg">
+              {landAreas.map(area => (
+                <label
+                  key={area.id}
+                  className="flex items-center gap-2 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={formData.landAreaIds.includes(
+                      area.id
+                    )}
+                    onChange={() =>
+                      handleAreaToggle(
+                        area.id
+                      )
+                    }
+                    className="rounded border-gray-300 dark:border-gray-600 text-green-600 focus:ring-green-500"
+                  />
+
+                  {area.code} —{' '}
+                  {area.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4">
+          <label className="block text-sm font-medium mb-1">
+            Descrição
+          </label>
+
+          <textarea
+            name="description"
+            value={
+              formData.description
+            }
+            onChange={handleChange}
+            rows={3}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 resize-y"
+            placeholder="Informações adicionais (opcional)"
+          />
+        </div>
+
+        {submitError && (
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
+            {submitError}
+          </div>
+        )}
+      </Card>
+
+      <div className="mt-6 flex flex-wrap gap-3">
+        <Button
+          type="submit"
+          disabled={submitting}
+        >
+          {submitting
+            ? 'Salvando...'
+            : 'Salvar'}
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+        >
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+============================================================
+ARQUIVO: src/components/ui/Card.tsx
+============================================================
+import { ReactNode } from 'react'
+
+interface CardProps {
+  children: ReactNode
+  className?: string
+}
+
+export default function Card({
+  children,
+  className = '',
+}: CardProps) {
+  return (
+    <div
+      className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 ${className}`}
+    >
+      {children}
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/components/ui/PageFeedback.tsx
+============================================================
+import { useEffect, useRef } from 'react'
+
+type PageFeedbackType = 'success' | 'error' | 'warning' | 'info'
+
+interface PageFeedbackProps {
+  type: PageFeedbackType
+  message: string
+  className?: string
+}
+
+const pageFeedbackStyles: Record<PageFeedbackType, string> = {
+  success: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+  error: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+  warning: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300',
+  info: 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+}
+
+const pageFeedbackRoles: Record<PageFeedbackType, 'alert' | 'status'> = {
+  success: 'status',
+  error: 'alert',
+  warning: 'alert',
+  info: 'status',
+}
+
+export default function PageFeedback({
+  type,
+  message,
+  className = '',
+}: PageFeedbackProps) {
+  const feedbackRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!message) return
+
+    const frame = requestAnimationFrame(() => {
+      feedbackRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+
+    return () => cancelAnimationFrame(frame)
+  }, [message])
+
+  return (
+    <div
+      ref={feedbackRef}
+      role={pageFeedbackRoles[type]}
+      aria-live={type === 'error' || type === 'warning' ? 'assertive' : 'polite'}
+      className={`scroll-mt-20 p-4 rounded-lg ${pageFeedbackStyles[type]} ${className}`}
+    >
+      {message}
+    </div>
+  )
+}
+
+============================================================
+ARQUIVO: src/components/ui/HelpTip.tsx
+============================================================
+import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react'
+import { HelpCircle } from 'lucide-react'
+
+interface HelpTipProps {
+  title: string
+  description: string
+  className?: string
+}
+
+const VIEWPORT_MARGIN = 16
+
+export default function HelpTip({
+  title,
+  description,
+  className = '',
+}: HelpTipProps) {
+  const [open, setOpen] = useState(false)
+  const [panelLeft, setPanelLeft] = useState<number>(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const panelId = useId()
+
+  useLayoutEffect(() => {
+    if (!open) return
+
+    const updatePosition = () => {
+      const container = containerRef.current
+      const button = buttonRef.current
+      const panel = panelRef.current
+
+      if (!container || !button || !panel) return
+
+      const containerRect = container.getBoundingClientRect()
+      const buttonRect = button.getBoundingClientRect()
+      const panelWidth = panel.offsetWidth
+
+      const buttonCenter = buttonRect.left + buttonRect.width / 2
+      let desiredLeftViewport = buttonCenter - panelWidth / 2
+
+      const minLeftViewport = VIEWPORT_MARGIN
+      const maxLeftViewport = Math.max(
+        VIEWPORT_MARGIN,
+        window.innerWidth - panelWidth - VIEWPORT_MARGIN
+      )
+
+      if (desiredLeftViewport < minLeftViewport) {
+        desiredLeftViewport = minLeftViewport
+      }
+
+      if (desiredLeftViewport > maxLeftViewport) {
+        desiredLeftViewport = maxLeftViewport
+      }
+
+      setPanelLeft(desiredLeftViewport - containerRect.left)
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className={`relative inline-flex ${className}`}>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={`Ajuda: ${title}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-describedby={open ? panelId : undefined}
+        onClick={() => setOpen(prev => !prev)}
+        className="inline-flex items-center justify-center w-5 h-5 rounded-full text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+      >
+        <HelpCircle className="w-4 h-4" aria-hidden="true" />
+      </button>
+
+      {open && (
+        <div
+          ref={panelRef}
+          id={panelId}
+          role="tooltip"
+          style={{ left: panelLeft }}
+          className="absolute top-full mt-2 w-72 max-w-[calc(100vw-2rem)] z-50 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg text-sm"
+        >
+          <p className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            {title}
+          </p>
+
+          <p className="text-gray-600 dark:text-gray-300 leading-snug">
+            {description}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+

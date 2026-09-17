@@ -1,0 +1,1091 @@
+export type UserRole = 'admin' | 'user'
+
+export type PermissionKey =
+  | 'animals'
+  | 'health'
+  | 'land'
+  | 'crops'
+  | 'machines'
+  | 'inventory'
+  | 'finance'
+  | 'property'
+  | 'agenda'
+  | 'reports'
+  | 'map'
+  | 'intelligence'
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  role: UserRole
+  employeeId?: string
+  permissions?: PermissionKey[]
+}
+
+export interface Farm {
+  id: string
+  name: string
+  location: string
+  totalArea: number
+  owner: string
+}
+
+export interface DashboardStats {
+  animalsCount: number
+  pendingVaccines: number
+  areasCount: number
+  activeCultivations: number
+  upcomingActivities: number
+}
+
+export interface Activity {
+  id: string
+  title: string
+  date: string
+  type:
+    | 'vaccine'
+    | 'treatment'
+    | 'planting'
+    | 'harvest'
+    | 'maintenance'
+  status: 'pending' | 'done' | 'overdue'
+}
+
+// -------------------- Animais --------------------
+
+export type AnimalSpecies =
+  | 'Bovino'
+  | 'Bubalino'
+  | 'Ovino'
+  | 'Caprino'
+  | 'Equino'
+  | 'Suíno'
+  | 'Outro'
+
+export type AnimalSex = 'Macho' | 'Fêmea'
+
+export type AnimalCategory =
+  | 'Bezerro'
+  | 'Bezerra'
+  | 'Novilho'
+  | 'Novilha'
+  | 'Vaca'
+  | 'Touro'
+  | 'Boi'
+  | 'Matriz'
+  | 'Reprodutor'
+  | 'Outro'
+
+export type AnimalStatus =
+  | 'Ativo'
+  | 'Vendido'
+  | 'Morto'
+  | 'Descartado'
+  | 'Transferido'
+
+export interface Animal {
+  id: string
+  identification: string
+  name?: string
+  species: AnimalSpecies
+  breed: string
+  sex: AnimalSex
+  birthDate?: string
+  category: AnimalCategory
+  status: AnimalStatus
+  lotId?: string
+  landAreaId?: string
+  currentWeight?: number
+  origin?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Lot {
+  id: string
+  name: string
+  description?: string
+  createdAt: string
+}
+
+export type AnimalEventType =
+  | 'created'
+  | 'updated'
+  | 'lot_change'
+  | 'status_change'
+  | 'land_change'
+
+export interface AnimalEvent {
+  id: string
+  animalId: string
+  type: AnimalEventType
+  description: string
+  date: string
+}
+
+// -------------------- Saúde Animal --------------------
+
+export interface Vaccination {
+  id: string
+  animalId: string
+  vaccineName: string
+  applicationDate: string
+  nextDoseDate?: string
+  dose?: string
+  batch?: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type VaccinationStatus =
+  | 'Sem próxima dose'
+  | 'Em dia'
+  | 'Próxima'
+  | 'Vencida'
+
+export type TreatmentStatus =
+  | 'Em andamento'
+  | 'Concluído'
+  | 'Interrompido'
+
+export interface Treatment {
+  id: string
+  animalId: string
+  reason: string
+  medication?: string
+  dosage?: string
+  startDate: string
+  endDate?: string
+  responsible?: string
+  notes?: string
+  status: TreatmentStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export type HealthOccurrenceType =
+  | 'Doença'
+  | 'Sintoma'
+  | 'Ferimento'
+  | 'Exame'
+  | 'Observação clínica'
+  | 'Outro'
+
+export type HealthSeverity = 'Baixa' | 'Média' | 'Alta'
+
+export type HealthOccurrenceStatus = 'Aberta' | 'Resolvida'
+
+export interface HealthOccurrence {
+  id: string
+  animalId: string
+  date: string
+  type: HealthOccurrenceType
+  title: string
+  description?: string
+  severity: HealthSeverity
+  status: HealthOccurrenceStatus
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Terras --------------------
+
+export type LandAreaType =
+  | 'Piquete'
+  | 'Talhão'
+  | 'Pastagem'
+  | 'Reserva/APP'
+  | 'Infraestrutura'
+  | 'Área ociosa'
+  | 'Outro'
+
+export type LandAreaStatus =
+  | 'Em uso'
+  | 'Em descanso'
+  | 'Em recuperação'
+  | 'Inativa'
+
+export interface LandArea {
+  id: string
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  purpose?: string
+  status: LandAreaStatus
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PaddockOccupation {
+  id: string
+  landAreaId: string
+  lotId: string
+  entryDate: string
+  exitDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type RuralStructureType = 'Cerca' | 'Corredor' | 'Porteira'
+
+export type RuralStructureStatus = 'Em uso' | 'Em manutenção' | 'Inativa'
+
+export type RuralStructureCondition = 'Boa' | 'Regular' | 'Ruim'
+
+export interface RuralStructure {
+  id: string
+  code: string
+  name: string
+  type: RuralStructureType
+  landAreaIds: string[]
+  status: RuralStructureStatus
+  condition: RuralStructureCondition
+  lengthMeters?: number
+  widthMeters?: number
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type LandUseType =
+  | 'Uso produtivo'
+  | 'Descanso'
+  | 'Recuperação'
+  | 'Preservação'
+  | 'Manutenção'
+  | 'Outro'
+
+export interface LandUseRecord {
+  id: string
+  landAreaId: string
+  type: LandUseType
+  startDate: string
+  endDate?: string
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Cultivos --------------------
+
+export type CropCycleStatus =
+  | 'Planejado'
+  | 'Em andamento'
+  | 'Concluído'
+  | 'Cancelado'
+
+export interface CropCycle {
+  id: string
+  landAreaId: string
+  crop: string
+  cultivar?: string
+  season: string
+  status: CropCycleStatus
+  plantingDate?: string
+  expectedHarvestDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SoilAnalysis {
+  id: string
+  landAreaId: string
+  sampleDate: string
+  laboratory?: string
+  sampleCode?: string
+  sampleDepth?: string
+  ph?: number
+  organicMatter?: number
+  phosphorus?: number
+  potassium?: number
+  calcium?: number
+  magnesium?: number
+  aluminum?: number
+  cec?: number
+  baseSaturation?: number
+  aluminumSaturation?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type CropManagementType =
+  | 'Adubação'
+  | 'Irrigação'
+  | 'Pulverização'
+  | 'Capina'
+  | 'Controle de plantas daninhas'
+  | 'Controle de pragas'
+  | 'Controle de doenças'
+  | 'Manejo cultural'
+  | 'Outro'
+
+export interface CropManagement {
+  id: string
+  cropCycleId: string
+  date: string
+  type: CropManagementType
+  description: string
+  productOrMaterial?: string
+  doseOrQuantity?: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type HarvestProductionUnit = 'kg' | 't' | 'sc'
+
+export interface HarvestRecord {
+  id: string
+  cropCycleId: string
+  harvestDate: string
+  harvestedAreaHectares: number
+  productionQuantity: number
+  productionUnit: HarvestProductionUnit
+  sackWeightKg?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Máquinas --------------------
+
+export type MachineCategory =
+  | 'Trator'
+  | 'Colheitadeira'
+  | 'Pulverizador'
+  | 'Plantadeira'
+  | 'Semeadora'
+  | 'Grade'
+  | 'Arado'
+  | 'Roçadeira'
+  | 'Distribuidor'
+  | 'Implemento'
+  | 'Veículo'
+  | 'Outro'
+
+export type MachineStatus =
+  | 'Operacional'
+  | 'Em manutenção'
+  | 'Inativa'
+
+export interface Machine {
+  id: string
+  code: string
+  name: string
+  category: MachineCategory
+  brand?: string
+  model?: string
+  year?: number
+  identification?: string
+  hourMeter?: number
+  status: MachineStatus
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type MachineMaintenanceType =
+  | 'Preventiva'
+  | 'Corretiva'
+  | 'Inspeção'
+  | 'Lubrificação'
+  | 'Troca de óleo'
+  | 'Troca de filtros'
+  | 'Reparo'
+  | 'Outro'
+
+export interface MachineMaintenanceRecord {
+  id: string
+  machineId: string
+  maintenanceDate: string
+  type: MachineMaintenanceType
+  hourMeter?: number
+  servicePerformed: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type MachineOperationType =
+  | 'Preparo do solo'
+  | 'Plantio'
+  | 'Semeadura'
+  | 'Adubação'
+  | 'Pulverização'
+  | 'Colheita'
+  | 'Roçada'
+  | 'Irrigação'
+  | 'Transporte'
+  | 'Outro'
+
+export interface MachineUsageRecord {
+  id: string
+  machineId: string
+  landAreaId: string
+  cropCycleId?: string
+  operationDate: string
+  operationType: MachineOperationType
+  workedHours: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Estoque --------------------
+
+export type InventoryItemCategory =
+  | 'Ração'
+  | 'Medicamento veterinário'
+  | 'Vacina'
+  | 'Semente'
+  | 'Fertilizante'
+  | 'Defensivo agrícola'
+  | 'Combustível'
+  | 'Lubrificante'
+  | 'Peça'
+  | 'Material'
+  | 'Outro'
+
+export type InventoryItemUnit =
+  | 'kg'
+  | 'g'
+  | 'L'
+  | 'mL'
+  | 'un'
+  | 'sc'
+  | 't'
+  | 'm'
+  | 'Outro'
+
+export type InventoryItemStatus = 'Ativo' | 'Inativo'
+
+export interface InventoryItem {
+  id: string
+  code: string
+  name: string
+  category: InventoryItemCategory
+  unit: InventoryItemUnit
+  currentQuantity: number
+  minimumQuantity?: number
+  location?: string
+  description?: string
+  status: InventoryItemStatus
+  batchNumber?: string
+  expirationDate?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type InventoryMovementType = 'Entrada' | 'Saída'
+
+export type InventoryMovementOriginModule = 'health' | 'crops' | 'machines'
+
+export type InventoryMovementOriginType =
+  | 'vaccination'
+  | 'treatment'
+  | 'crop-management'
+  | 'machine-maintenance'
+
+export interface InventoryMovementOrigin {
+  module: InventoryMovementOriginModule
+  type: InventoryMovementOriginType
+  recordId: string
+}
+
+export interface InventoryMovement {
+  id: string
+  inventoryItemId: string
+  type: InventoryMovementType
+  movementDate: string
+  quantity: number
+  balanceBefore: number
+  balanceAfter: number
+  reason: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  origin?: InventoryMovementOrigin
+  itemCodeSnapshot?: string
+  itemNameSnapshot?: string
+  unitSnapshot?: InventoryItemUnit
+}
+
+// -------------------- Financeiro --------------------
+
+export type FinancialTransactionType = 'Receita' | 'Despesa'
+
+export type FinancialTransactionOriginModule =
+  | 'health'
+  | 'crops'
+  | 'machines'
+  | 'inventory'
+
+export type FinancialTransactionOriginType =
+  | 'vaccination'
+  | 'treatment'
+  | 'crop-management'
+  | 'machine-maintenance'
+  | 'inventory-entry'
+
+export interface FinancialTransactionOrigin {
+  module: FinancialTransactionOriginModule
+  type: FinancialTransactionOriginType
+  recordId: string
+}
+
+export interface FinancialCategory {
+  id: string
+  name: string
+  type: FinancialTransactionType
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FinancialTransaction {
+  id: string
+  type: FinancialTransactionType
+  date: string
+  categoryId: string
+  description: string
+  amount: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+  origin?: FinancialTransactionOrigin
+}
+
+// -------------------- Funcionários --------------------
+
+export type EmployeeStatus = 'Ativo' | 'Inativo'
+
+export interface Employee {
+  id: string
+  name: string
+  function: string
+  phone?: string
+  email?: string
+  status: EmployeeStatus
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type AccessAccountStatus = 'Ativo' | 'Inativo'
+
+export interface AccessAccount {
+  id: string
+  employeeId: string
+  email: string
+  role: UserRole
+  permissions: PermissionKey[]
+  status: AccessAccountStatus
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Agenda --------------------
+
+export type AgendaActivityType =
+  | 'Tarefa'
+  | 'Vacinação'
+  | 'Tratamento'
+  | 'Plantio'
+  | 'Colheita'
+  | 'Manutenção'
+  | 'Irrigação'
+  | 'Pagamento'
+  | 'Reposição de estoque'
+  | 'Outro'
+
+export type AgendaActivityPriority = 'Baixa' | 'Média' | 'Alta'
+
+export type AgendaActivityStatus = 'Pendente' | 'Concluída' | 'Cancelada'
+
+export interface AgendaActivity {
+  id: string
+  title: string
+  type: AgendaActivityType
+  date: string
+  time?: string
+  priority: AgendaActivityPriority
+  status: AgendaActivityStatus
+  responsibleEmployeeId?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type AgendaEntrySource =
+  | 'manual'
+  | 'health'
+  | 'crops'
+  | 'inventory'
+  | 'machines'
+
+export type AgendaDisplayStatus = AgendaActivityStatus | 'Atrasada'
+
+export interface AgendaEntry {
+  id: string
+  title: string
+  type: AgendaActivityType | 'Validade de estoque'
+  date: string
+  time?: string
+  priority: AgendaActivityPriority
+  status: AgendaDisplayStatus
+  source: AgendaEntrySource
+  sourceLabel: string
+  sourceRecordId?: string
+  sourcePath?: string
+  responsibleEmployeeId?: string
+  responsibleName?: string
+  notes?: string
+  editable: boolean
+}
+
+// -------------------- Alertas --------------------
+
+export type AgroAlertSeverity = 'Urgente' | 'Atenção' | 'Informativo'
+
+export type AgroAlertSource =
+  | 'agenda'
+  | 'health'
+  | 'crops'
+  | 'inventory'
+  | 'machines'
+
+export interface AgroAlert {
+  id: string
+  title: string
+  message: string
+  severity: AgroAlertSeverity
+  source: AgroAlertSource
+  sourceLabel: string
+  date?: string
+  sourcePath?: string
+}
+
+// -------------------- Mapa --------------------
+
+export interface PropertyMapLocation {
+  latitude: number
+  longitude: number
+  updatedAt: string
+}
+
+export type SchematicShapeType =
+  | 'rectangle'
+  | 'triangle'
+  | 'trapezoid'
+  | 'l-shape'
+  | 'free'
+
+export interface MapRelativePoint {
+  x: number
+  y: number
+}
+
+export interface LandAreaMapLayout {
+  landAreaId: string
+  x: number
+  y: number
+  width: number
+  height: number
+  shapeType?: SchematicShapeType
+  points?: MapRelativePoint[]
+}
+
+export interface GeographicPoint {
+  latitude: number
+  longitude: number
+}
+
+export interface PropertyGeographicBoundary {
+  points: GeographicPoint[]
+  updatedAt: string
+}
+
+export interface LandAreaGeographicBoundary {
+  landAreaId: string
+  points: GeographicPoint[]
+  updatedAt: string
+}
+
+export interface PropertyMapState {
+  location: PropertyMapLocation | null
+  layouts: LandAreaMapLayout[]
+}
+
+// -------------------- Intelligence --------------------
+
+export type IntelligenceSeverity =
+  | 'critical'
+  | 'warning'
+  | 'opportunity'
+  | 'information'
+
+export type IntelligenceModule =
+  | 'animals'
+  | 'health'
+  | 'land'
+  | 'crops'
+  | 'machines'
+  | 'inventory'
+  | 'finance'
+  | 'agenda'
+  | 'map'
+
+export interface IntelligenceInsight {
+  id: string
+  title: string
+  description: string
+  severity: IntelligenceSeverity
+  module: IntelligenceModule
+  moduleLabel: string
+  explanation: string
+  sourceRecordId?: string
+  sourcePath?: string
+}
+
+export interface IntelligenceMetricSummary {
+  needsAttention: number
+  opportunities: number
+  informations: number
+  modulesAnalyzed: number
+}
+
+export interface IntelligenceDataQualityIssue {
+  id: string
+  title: string
+  description: string
+  explanation: string
+  module: IntelligenceModule
+  moduleLabel: string
+  affectedCount: number
+}
+
+export interface IntelligenceAnswerItem {
+  text: string
+  sourcePath?: string
+}
+
+export interface IntelligenceAnswer {
+  questionId: string
+  title: string
+  summary: string
+  items: IntelligenceAnswerItem[]
+  unavailable: boolean
+}
+
+export interface IntelligenceQuestion {
+  id: string
+  label: string
+}
+
+export type IntelligenceChatRole = 'user' | 'assistant'
+
+export interface IntelligenceChatMessage {
+  id: string
+  role: IntelligenceChatRole
+  content: string
+  createdAt: string
+}
+
+export type IntelligenceActionType =
+  | 'create_land_area'
+  | 'create_animal'
+  | 'create_agenda_activity'
+  | 'create_financial_transaction'
+  | 'create_inventory_movement'
+  | 'create_crop_cycle'
+  | 'update_machine_status'
+
+export interface CreateLandAreaActionData {
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  purpose?: string | null
+  status: LandAreaStatus
+  description?: string | null
+}
+
+export interface CreateAnimalActionData {
+  identification: string
+  name?: string | null
+  species: AnimalSpecies
+  breed: string
+  sex: AnimalSex
+  birthDate?: string | null
+  category: AnimalCategory
+  status: AnimalStatus
+  lotId?: string | null
+  currentWeight?: number | null
+  origin?: string | null
+  notes?: string | null
+}
+
+export interface CreateAgendaActivityActionData {
+  title: string
+  type: AgendaActivityType
+  date: string
+  time?: string | null
+  priority: AgendaActivityPriority
+  status: AgendaActivityStatus
+  responsibleEmployeeId?: string | null
+  notes?: string | null
+}
+
+export interface CreateFinancialTransactionActionData {
+  type: FinancialTransactionType
+  date: string
+  categoryId: string
+  description: string
+  amount: number
+  notes?: string | null
+}
+
+export interface CreateInventoryMovementActionData {
+  inventoryItemId: string
+  type: InventoryMovementType
+  movementDate: string
+  quantity: number
+  reason: string
+  responsible?: string | null
+  notes?: string | null
+}
+
+export interface CreateCropCycleActionData {
+  landAreaId: string
+  crop: string
+  cultivar?: string | null
+  season: string
+  status: CropCycleStatus
+  plantingDate?: string | null
+  expectedHarvestDate?: string | null
+  notes?: string | null
+}
+
+export interface UpdateMachineStatusActionData {
+  machineCode: string
+  newStatus: MachineStatus
+}
+
+export type IntelligenceActionProposal =
+  | { type: 'create_land_area'; data: CreateLandAreaActionData }
+  | { type: 'create_animal'; data: CreateAnimalActionData }
+  | { type: 'create_agenda_activity'; data: CreateAgendaActivityActionData }
+  | { type: 'create_financial_transaction'; data: CreateFinancialTransactionActionData }
+  | { type: 'create_inventory_movement'; data: CreateInventoryMovementActionData }
+  | { type: 'create_crop_cycle'; data: CreateCropCycleActionData }
+  | { type: 'update_machine_status'; data: UpdateMachineStatusActionData }
+
+export interface IntelligenceActionCapabilities {
+  canCreateLandArea: boolean
+  canCreateAnimal: boolean
+  canCreateAgendaActivity: boolean
+  canCreateFinancialTransaction: boolean
+  canCreateInventoryMovement: boolean
+  canCreateCropCycle: boolean
+  canUpdateMachineStatus: boolean
+}
+
+export interface IntelligenceContextMetadata {
+  generatedAt: string
+  capabilities: IntelligenceActionCapabilities
+}
+
+export interface IntelligenceContextList<T> {
+  total: number
+  truncated: boolean
+  items: T[]
+}
+
+export interface IntelligenceContextAnimals {
+  total: number
+  active: number
+  bySpecies?: Record<string, number>
+  byStatus?: Record<string, number>
+}
+
+export interface IntelligenceContextHealthEntry {
+  description: string
+  animalLabel?: string
+}
+
+export interface IntelligenceContextHealth {
+  overdueVaccinations: IntelligenceContextList<IntelligenceContextHealthEntry>
+  upcomingVaccinations: IntelligenceContextList<IntelligenceContextHealthEntry>
+  ongoingTreatments: IntelligenceContextList<IntelligenceContextHealthEntry>
+  openOccurrences: IntelligenceContextList<IntelligenceContextHealthEntry>
+}
+
+export interface IntelligenceContextInventoryItem {
+  code: string
+  name: string
+  quantity: number
+  unit: string
+  minimum?: number
+}
+
+export interface IntelligenceContextInventoryItemOption {
+  id: string
+  code: string
+  name: string
+  unit: string
+  currentQuantity: number
+}
+
+export interface IntelligenceContextInventoryConsumptionSource {
+  sourceLabel: string
+  movementCount: number
+}
+
+export interface IntelligenceContextInventoryIntegratedMovement {
+  itemCode: string
+  itemName: string
+  quantity: number
+  unit: string
+  movementDate: string
+  sourceModule: InventoryMovementOriginModule
+  sourceLabel: string
+  sourceType: InventoryMovementOriginType
+  sourceRecordId: string
+}
+
+export interface IntelligenceContextInventory {
+  activeItems: number
+  zeroedItems: IntelligenceContextList<IntelligenceContextInventoryItem>
+  belowMinimumItems: IntelligenceContextList<IntelligenceContextInventoryItem>
+  expiringItems: IntelligenceContextList<IntelligenceContextInventoryItem>
+  itemsLimited: IntelligenceContextList<IntelligenceContextInventoryItemOption>
+  /**
+   * Consumo integrado agregado por módulo de origem.
+   * Só inclui origens para as quais o usuário possui permissão.
+   */
+  consumptionBySource: IntelligenceContextList<IntelligenceContextInventoryConsumptionSource>
+  /**
+   * Movimentações integradas detalhadas, limitadas e priorizadas.
+   * Filtradas por permissão do módulo de origem ANTES de compor os objetos.
+   */
+  integratedMovements: IntelligenceContextList<IntelligenceContextInventoryIntegratedMovement>
+}
+
+export interface IntelligenceContextFinanceCategory {
+  label: string
+  amount: number
+}
+
+export interface IntelligenceContextFinanceCategoryOption {
+  id: string
+  name: string
+  type: FinancialTransactionType
+}
+
+export interface IntelligenceContextFinanceBySource {
+  sourceLabel: string
+  amount: number
+}
+
+export interface IntelligenceContextFinance {
+  totalRevenues: number
+  totalExpenses: number
+  balance: number
+  topExpenseCategories: IntelligenceContextList<IntelligenceContextFinanceCategory>
+  categoriesLimited: IntelligenceContextList<IntelligenceContextFinanceCategoryOption>
+  /**
+   * Despesas por módulo de origem.
+   * Só inclui origens para as quais o usuário possui permissão.
+   */
+  expensesBySource: IntelligenceContextList<IntelligenceContextFinanceBySource>
+}
+
+export interface IntelligenceContextLandLandAreaOption {
+  id: string
+  code: string
+  name: string
+}
+
+export interface IntelligenceContextLand {
+  totalAreas: number
+  byStatus: Record<string, number>
+  occupiedPaddocks: number
+  areasLimited: IntelligenceContextList<IntelligenceContextLandLandAreaOption>
+}
+
+export interface IntelligenceContextMapLandArea {
+  code: string
+  name: string
+  cadastradaHa: number
+  demarcadaHa: number
+  diffHa: number
+}
+
+export interface IntelligenceContextMap {
+  propertyAreaHa: number | null
+  propertyAreaM2: number | null
+  demarcatedAreas: IntelligenceContextList<IntelligenceContextMapLandArea>
+}
+
+export interface IntelligenceContextCrops {
+  activeCycles: number
+  plannedCycles: number
+  upcomingHarvests: IntelligenceContextList<string>
+  overdueHarvests: IntelligenceContextList<string>
+}
+
+export interface IntelligenceContextMachineOption {
+  code: string
+  name: string
+  status: MachineStatus
+}
+
+export interface IntelligenceContextMachines {
+  total: number
+  operational: number
+  maintenance: number
+  inactive: number
+  maintenanceMachines: IntelligenceContextList<IntelligenceContextMachineOption>
+  machinesList: IntelligenceContextList<IntelligenceContextMachineOption>
+}
+
+export interface IntelligenceContextAgenda {
+  overdue: IntelligenceContextList<string>
+  highPriorityPending: IntelligenceContextList<string>
+}
+
+export interface IntelligenceContextAnimalLandEntry {
+  animalLabel: string
+  landAreaLabel: string
+}
+
+export interface IntelligenceContextAnimalLand {
+  total: number
+  landAreasWithAnimals: number
+  entries: IntelligenceContextList<IntelligenceContextAnimalLandEntry>
+}
+
+export interface IntelligenceContext {
+  metadata: IntelligenceContextMetadata
+  animals?: IntelligenceContextAnimals
+  health?: IntelligenceContextHealth
+  land?: IntelligenceContextLand
+  crops?: IntelligenceContextCrops
+  machines?: IntelligenceContextMachines
+  inventory?: IntelligenceContextInventory
+  finance?: IntelligenceContextFinance
+  agenda?: IntelligenceContextAgenda
+  map?: IntelligenceContextMap
+  animalLand?: IntelligenceContextAnimalLand
+}

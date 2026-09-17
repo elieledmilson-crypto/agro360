@@ -1,0 +1,2004 @@
+]633;E;for file in package.json src/types/index.ts src/services/storage.ts src/contexts/AuthContext.tsx src/hooks/useAuth.ts src/components/common/ProtectedRoute.tsx src/components/common/PublicOnlyRoute.tsx src/pages/Login.tsx src/components/layout/AppLayout.tsx src/components/layout/Header.tsx src/components/layout/Sidebar.tsx src/components/layout/MobileNav.tsx src/routes/AppRoutes.tsx src/components/ui/Button.tsx src/components/ui/Card.tsx src/components/ui/Input.tsx src/components/ui/PageFeedback.tsx src/components/ui/HelpTip.tsx;973ed494-56fa-48e6-b37c-3ba54e94778a]633;C================================================================
+ARQUIVO: package.json
+================================================================
+{
+  "name": "agro360",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.309.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.19.1",
+    "@typescript-eslint/parser": "^6.19.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "eslint": "^8.56.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.1",
+    "typescript": "5.3.3",
+    "vite": "^5.0.12"
+  }
+}
+================================================================
+ARQUIVO: src/types/index.ts
+================================================================
+export interface User {
+  id: string
+  name: string
+  email: string
+  role: 'admin' | 'user'
+}
+
+export interface Farm {
+  id: string
+  name: string
+  location: string
+  totalArea: number
+  owner: string
+}
+
+export interface DashboardStats {
+  animalsCount: number
+  pendingVaccines: number
+  areasCount: number
+  activeCultivations: number
+  upcomingActivities: number
+}
+
+export interface Activity {
+  id: string
+  title: string
+  date: string
+  type: 'vaccine' | 'treatment' | 'planting' | 'harvest' | 'maintenance'
+  status: 'pending' | 'done' | 'overdue'
+}
+
+// -------------------- Tipos da Gestão de Animais --------------------
+
+export type AnimalSpecies =
+  | 'Bovino'
+  | 'Bubalino'
+  | 'Ovino'
+  | 'Caprino'
+  | 'Equino'
+  | 'Suíno'
+  | 'Outro'
+
+export type AnimalSex = 'Macho' | 'Fêmea'
+
+export type AnimalCategory =
+  | 'Bezerro'
+  | 'Bezerra'
+  | 'Novilho'
+  | 'Novilha'
+  | 'Vaca'
+  | 'Touro'
+  | 'Boi'
+  | 'Matriz'
+  | 'Reprodutor'
+  | 'Outro'
+
+export type AnimalStatus =
+  | 'Ativo'
+  | 'Vendido'
+  | 'Morto'
+  | 'Descartado'
+  | 'Transferido'
+
+export interface Animal {
+  id: string
+  identification: string
+  name?: string
+  species: AnimalSpecies
+  breed: string
+  sex: AnimalSex
+  birthDate?: string
+  category: AnimalCategory
+  status: AnimalStatus
+  lotId?: string
+  currentWeight?: number
+  origin?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Lot {
+  id: string
+  name: string
+  description?: string
+  createdAt: string
+}
+
+export type AnimalEventType =
+  | 'created'
+  | 'updated'
+  | 'lot_change'
+  | 'status_change'
+
+export interface AnimalEvent {
+  id: string
+  animalId: string
+  type: AnimalEventType
+  description: string
+  date: string
+}
+
+// -------------------- Tipos de Saúde Animal --------------------
+
+export interface Vaccination {
+  id: string
+  animalId: string
+  vaccineName: string
+  applicationDate: string
+  nextDoseDate?: string
+  dose?: string
+  batch?: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type VaccinationStatus =
+  | 'Sem próxima dose'
+  | 'Em dia'
+  | 'Próxima'
+  | 'Vencida'
+
+export type TreatmentStatus =
+  | 'Em andamento'
+  | 'Concluído'
+  | 'Interrompido'
+
+export interface Treatment {
+  id: string
+  animalId: string
+  reason: string
+  medication?: string
+  dosage?: string
+  startDate: string
+  endDate?: string
+  responsible?: string
+  notes?: string
+  status: TreatmentStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export type HealthOccurrenceType =
+  | 'Doença'
+  | 'Sintoma'
+  | 'Ferimento'
+  | 'Exame'
+  | 'Observação clínica'
+  | 'Outro'
+
+export type HealthSeverity =
+  | 'Baixa'
+  | 'Média'
+  | 'Alta'
+
+export type HealthOccurrenceStatus =
+  | 'Aberta'
+  | 'Resolvida'
+
+export interface HealthOccurrence {
+  id: string
+  animalId: string
+  date: string
+  type: HealthOccurrenceType
+  title: string
+  description?: string
+  severity: HealthSeverity
+  status: HealthOccurrenceStatus
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Terras --------------------
+
+export type LandAreaType =
+  | 'Piquete'
+  | 'Talhão'
+  | 'Pastagem'
+  | 'Reserva/APP'
+  | 'Infraestrutura'
+  | 'Área ociosa'
+  | 'Outro'
+
+export type LandAreaStatus =
+  | 'Em uso'
+  | 'Em descanso'
+  | 'Em recuperação'
+  | 'Inativa'
+
+export interface LandArea {
+  id: string
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  purpose?: string
+  status: LandAreaStatus
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Manejo de Piquetes --------------------
+
+export interface PaddockOccupation {
+  id: string
+  landAreaId: string
+  lotId: string
+  entryDate: string
+  exitDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Estruturas Rurais --------------------
+
+export type RuralStructureType =
+  | 'Cerca'
+  | 'Corredor'
+  | 'Porteira'
+
+export type RuralStructureStatus =
+  | 'Em uso'
+  | 'Em manutenção'
+  | 'Inativa'
+
+export type RuralStructureCondition =
+  | 'Boa'
+  | 'Regular'
+  | 'Ruim'
+
+export interface RuralStructure {
+  id: string
+  code: string
+  name: string
+  type: RuralStructureType
+  landAreaIds: string[]
+  status: RuralStructureStatus
+  condition: RuralStructureCondition
+  lengthMeters?: number
+  widthMeters?: number
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Histórico de Utilização das Áreas --------------------
+
+export type LandUseType =
+  | 'Uso produtivo'
+  | 'Descanso'
+  | 'Recuperação'
+  | 'Preservação'
+  | 'Manutenção'
+  | 'Outro'
+
+export interface LandUseRecord {
+  id: string
+  landAreaId: string
+  type: LandUseType
+  startDate: string
+  endDate?: string
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Cultivos --------------------
+
+export type CropCycleStatus =
+  | 'Planejado'
+  | 'Em andamento'
+  | 'Concluído'
+  | 'Cancelado'
+
+export interface CropCycle {
+  id: string
+  landAreaId: string
+  crop: string
+  cultivar?: string
+  season: string
+  status: CropCycleStatus
+  plantingDate?: string
+  expectedHarvestDate?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Análises de Solo --------------------
+
+export interface SoilAnalysis {
+  id: string
+  landAreaId: string
+  sampleDate: string
+  laboratory?: string
+  sampleCode?: string
+  sampleDepth?: string
+  ph?: number
+  organicMatter?: number
+  phosphorus?: number
+  potassium?: number
+  calcium?: number
+  magnesium?: number
+  aluminum?: number
+  cec?: number
+  baseSaturation?: number
+  aluminumSaturation?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Manejos Agrícolas --------------------
+
+export type CropManagementType =
+  | 'Adubação'
+  | 'Irrigação'
+  | 'Pulverização'
+  | 'Capina'
+  | 'Controle de plantas daninhas'
+  | 'Controle de pragas'
+  | 'Controle de doenças'
+  | 'Manejo cultural'
+  | 'Outro'
+
+export interface CropManagement {
+  id: string
+  cropCycleId: string
+  date: string
+  type: CropManagementType
+  description: string
+  productOrMaterial?: string
+  doseOrQuantity?: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Colheita --------------------
+
+export type HarvestProductionUnit =
+  | 'kg'
+  | 't'
+  | 'sc'
+
+export interface HarvestRecord {
+  id: string
+  cropCycleId: string
+  harvestDate: string
+  harvestedAreaHectares: number
+  productionQuantity: number
+  productionUnit: HarvestProductionUnit
+  sackWeightKg?: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Máquinas e Equipamentos --------------------
+
+export type MachineCategory =
+  | 'Trator'
+  | 'Colheitadeira'
+  | 'Pulverizador'
+  | 'Plantadeira'
+  | 'Semeadora'
+  | 'Grade'
+  | 'Arado'
+  | 'Roçadeira'
+  | 'Distribuidor'
+  | 'Implemento'
+  | 'Veículo'
+  | 'Outro'
+
+export type MachineStatus =
+  | 'Operacional'
+  | 'Em manutenção'
+  | 'Inativa'
+
+export interface Machine {
+  id: string
+  code: string
+  name: string
+  category: MachineCategory
+  brand?: string
+  model?: string
+  year?: number
+  identification?: string
+  hourMeter?: number
+  status: MachineStatus
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Manutenção de Máquinas --------------------
+
+export type MachineMaintenanceType =
+  | 'Preventiva'
+  | 'Corretiva'
+  | 'Inspeção'
+  | 'Lubrificação'
+  | 'Troca de óleo'
+  | 'Troca de filtros'
+  | 'Reparo'
+  | 'Outro'
+
+export interface MachineMaintenanceRecord {
+  id: string
+  machineId: string
+  maintenanceDate: string
+  type: MachineMaintenanceType
+  hourMeter?: number
+  servicePerformed: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Utilização Operacional de Máquinas --------------------
+
+export type MachineOperationType =
+  | 'Preparo do solo'
+  | 'Plantio'
+  | 'Semeadura'
+  | 'Adubação'
+  | 'Pulverização'
+  | 'Colheita'
+  | 'Roçada'
+  | 'Irrigação'
+  | 'Transporte'
+  | 'Outro'
+
+export interface MachineUsageRecord {
+  id: string
+  machineId: string
+  landAreaId: string
+  cropCycleId?: string
+  operationDate: string
+  operationType: MachineOperationType
+  workedHours: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Estoque --------------------
+
+export type InventoryItemCategory =
+  | 'Ração'
+  | 'Medicamento veterinário'
+  | 'Vacina'
+  | 'Semente'
+  | 'Fertilizante'
+  | 'Defensivo agrícola'
+  | 'Combustível'
+  | 'Lubrificante'
+  | 'Peça'
+  | 'Material'
+  | 'Outro'
+
+export type InventoryItemUnit =
+  | 'kg'
+  | 'g'
+  | 'L'
+  | 'mL'
+  | 'un'
+  | 'sc'
+  | 't'
+  | 'm'
+  | 'Outro'
+
+export type InventoryItemStatus =
+  | 'Ativo'
+  | 'Inativo'
+
+export interface InventoryItem {
+  id: string
+  code: string
+  name: string
+  category: InventoryItemCategory
+  unit: InventoryItemUnit
+  currentQuantity: number
+  minimumQuantity?: number
+  location?: string
+  description?: string
+  status: InventoryItemStatus
+  batchNumber?: string
+  expirationDate?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// -------------------- Tipos de Movimentações de Estoque --------------------
+
+export type InventoryMovementType =
+  | 'Entrada'
+  | 'Saída'
+
+export type InventoryMovementOriginModule =
+  | 'health'
+  | 'crops'
+  | 'machines'
+
+export type InventoryMovementOriginType =
+  | 'vaccination'
+  | 'treatment'
+  | 'crop-management'
+  | 'machine-maintenance'
+
+export interface InventoryMovementOrigin {
+  module: InventoryMovementOriginModule
+  type: InventoryMovementOriginType
+  recordId: string
+}
+
+export interface InventoryMovement {
+  id: string
+  inventoryItemId: string
+  type: InventoryMovementType
+  movementDate: string
+  quantity: number
+  balanceBefore: number
+  balanceAfter: number
+  reason: string
+  responsible?: string
+  notes?: string
+  createdAt: string
+  origin?: InventoryMovementOrigin
+  itemCodeSnapshot?: string
+  itemNameSnapshot?: string
+  unitSnapshot?: InventoryItemUnit
+}
+
+// -------------------- Tipos do Módulo Financeiro --------------------
+
+export type FinancialTransactionType =
+  | 'Receita'
+  | 'Despesa'
+
+export interface FinancialCategory {
+  id: string
+  name: string
+  type: FinancialTransactionType
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FinancialTransaction {
+  id: string
+  type: FinancialTransactionType
+  date: string
+  categoryId: string
+  description: string
+  amount: number
+  notes?: string
+  createdAt: string
+  updatedAt: string
+}
+================================================================
+ARQUIVO: src/services/storage.ts
+================================================================
+export function getStorageItem<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return fallback
+
+    const parsed = JSON.parse(raw) as T
+
+    if (Array.isArray(fallback) && !Array.isArray(parsed)) {
+      localStorage.removeItem(key)
+      return fallback
+    }
+
+    return parsed
+  } catch {
+    localStorage.removeItem(key)
+    return fallback
+  }
+}
+
+export function setStorageItem<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Ignora erros de quota ou permissão.
+  }
+}
+
+export function generateId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
+  }
+
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 10)
+}
+================================================================
+ARQUIVO: src/contexts/AuthContext.tsx
+================================================================
+import { createContext, useState, ReactNode } from 'react'
+import { User } from '../types'
+import * as authService from '../services/authService'
+
+interface AuthContextType {
+  user: User | null
+  isAuthenticated: boolean
+  login: (
+    email: string,
+    password: string,
+    remember: boolean,
+  ) => Promise<void>
+  logout: () => void
+}
+
+export const AuthContext = createContext<AuthContextType>(
+  {} as AuthContextType,
+)
+
+const STORAGE_KEY = 'agro360_user'
+
+function getStoredUser(): User | null {
+  const local = localStorage.getItem(STORAGE_KEY)
+
+  if (local) {
+    try {
+      return JSON.parse(local) as User
+    } catch {
+      localStorage.removeItem(STORAGE_KEY)
+    }
+  }
+
+  const session = sessionStorage.getItem(STORAGE_KEY)
+
+  if (session) {
+    try {
+      return JSON.parse(session) as User
+    } catch {
+      sessionStorage.removeItem(STORAGE_KEY)
+    }
+  }
+
+  return null
+}
+
+export function AuthProvider({
+  children,
+}: {
+  children: ReactNode
+}) {
+  const [user, setUser] = useState<User | null>(
+    () => getStoredUser(),
+  )
+
+  const isAuthenticated = !!user
+
+  const login = async (
+    email: string,
+    password: string,
+    remember: boolean,
+  ) => {
+    const { user: loggedUser } = await authService.login(
+      email,
+      password,
+    )
+
+    if (remember) {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(loggedUser),
+      )
+
+      sessionStorage.removeItem(STORAGE_KEY)
+    } else {
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(loggedUser),
+      )
+
+      localStorage.removeItem(STORAGE_KEY)
+    }
+
+    setUser(loggedUser)
+  }
+
+  const logout = () => {
+    localStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem(STORAGE_KEY)
+
+    setUser(null)
+  }
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated,
+        login,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
+}
+================================================================
+ARQUIVO: src/hooks/useAuth.ts
+================================================================
+import { useContext } from 'react'
+import { AuthContext } from '../contexts/AuthContext'
+
+export function useAuth() {
+  return useContext(AuthContext)
+}
+================================================================
+ARQUIVO: src/components/common/ProtectedRoute.tsx
+================================================================
+import {
+  Navigate,
+  Outlet,
+  useLocation,
+} from 'react-router-dom'
+
+import { useAuth } from '../../hooks/useAuth'
+
+export function ProtectedRoute() {
+  const { isAuthenticated } = useAuth()
+  const location = useLocation()
+
+  if (!isAuthenticated) {
+    return (
+      <Navigate
+        to="/login"
+        state={{
+          from: location,
+        }}
+        replace
+      />
+    )
+  }
+
+  return <Outlet />
+}
+================================================================
+ARQUIVO: src/components/common/PublicOnlyRoute.tsx
+================================================================
+import {
+  Navigate,
+  Outlet,
+  useLocation,
+} from 'react-router-dom'
+
+import { useAuth } from '../../hooks/useAuth'
+
+export function PublicOnlyRoute() {
+  const { isAuthenticated } = useAuth()
+  const location = useLocation()
+
+  if (isAuthenticated) {
+    const from =
+      location.state?.from?.pathname ||
+      '/dashboard'
+
+    return (
+      <Navigate
+        to={from}
+        replace
+      />
+    )
+  }
+
+  return <Outlet />
+}
+================================================================
+ARQUIVO: src/pages/Login.tsx
+================================================================
+import {
+  useState,
+  FormEvent,
+} from 'react'
+
+import {
+  useNavigate,
+  useLocation,
+} from 'react-router-dom'
+
+import { Sprout } from 'lucide-react'
+
+import { useAuth } from '../hooks/useAuth'
+import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
+
+export default function Login() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const { login } = useAuth()
+
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const from =
+    (
+      location.state as {
+        from?: {
+          pathname?: string
+        }
+      }
+    )?.from?.pathname || '/dashboard'
+
+  const handleSubmit = async (
+    e: FormEvent,
+  ) => {
+    e.preventDefault()
+
+    setError('')
+
+    if (!email || !password) {
+      setError('Preencha todos os campos')
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      await login(
+        email,
+        password,
+        remember,
+      )
+
+      navigate(from, {
+        replace: true,
+      })
+    } catch {
+      setError('Falha ao entrar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-950 p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-green-600 mb-4">
+            <Sprout className="w-8 h-8 text-white" />
+          </div>
+
+          <h1 className="text-2xl font-bold">
+            Agro360
+          </h1>
+
+          <p className="text-gray-600 dark:text-gray-400">
+            Gestão Rural Integrada
+          </p>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 md:p-8"
+        >
+          <h2 className="text-lg font-semibold mb-6">
+            Entrar
+          </h2>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <Input
+              label="E-mail"
+              type="email"
+              value={email}
+              onChange={e =>
+                setEmail(e.target.value)
+              }
+              placeholder="seu@email.com"
+              required
+            />
+
+            <Input
+              label="Senha"
+              type="password"
+              value={password}
+              onChange={e =>
+                setPassword(e.target.value)
+              }
+              placeholder="••••••••"
+              required
+            />
+          </div>
+
+          <label className="flex items-center gap-2 mt-4 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={e =>
+                setRemember(e.target.checked)
+              }
+              className="rounded border-gray-300 dark:border-gray-600 text-green-600 focus:ring-green-500"
+            />
+
+            Lembrar minha sessão neste dispositivo
+          </label>
+
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-6"
+          >
+            {loading
+              ? 'Entrando...'
+              : 'Entrar'}
+          </Button>
+
+          <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400">
+            Acesso simulado — use qualquer e-mail e senha
+          </p>
+        </form>
+      </div>
+    </div>
+  )
+}
+================================================================
+ARQUIVO: src/components/layout/AppLayout.tsx
+================================================================
+import { useState } from 'react'
+import { Outlet } from 'react-router-dom'
+
+import Sidebar from './Sidebar'
+import Header from './Header'
+import MobileNav from './MobileNav'
+
+export default function AppLayout() {
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
+      <Sidebar />
+
+      <MobileNav
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+      />
+
+      <div className="flex-1 flex flex-col lg:pl-64">
+        <Header
+          onMenuClick={() => setMobileOpen(true)}
+        />
+
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
+          <div className="max-w-7xl mx-auto">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </div>
+  )
+}
+================================================================
+ARQUIVO: src/components/layout/Header.tsx
+================================================================
+import {
+  LogOut,
+  Menu,
+  Moon,
+  Sun,
+  User,
+} from 'lucide-react'
+
+import { useAuth } from '../../hooks/useAuth'
+import { useTheme } from '../../hooks/useTheme'
+
+export default function Header({
+  onMenuClick,
+}: {
+  onMenuClick: () => void
+}) {
+  const { user, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
+
+  return (
+    <header className="h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4 md:px-6 sticky top-0 z-20">
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+        aria-label="Abrir menu"
+      >
+        <Menu className="w-6 h-6" />
+      </button>
+
+      <h1 className="hidden lg:block text-lg font-semibold">
+        Gestão Rural
+      </h1>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+          aria-label="Alternar tema"
+        >
+          {theme === 'light' ? (
+            <Moon className="w-5 h-5" />
+          ) : (
+            <Sun className="w-5 h-5" />
+          )}
+        </button>
+
+        <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
+          <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
+            <User className="w-4 h-4 text-green-700 dark:text-green-300" />
+          </div>
+
+          <span className="hidden md:block text-sm font-medium">
+            {user?.name}
+          </span>
+        </div>
+
+        <button
+          onClick={logout}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-red-600"
+          aria-label="Sair"
+          title="Sair"
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
+      </div>
+    </header>
+  )
+}
+================================================================
+ARQUIVO: src/components/layout/Sidebar.tsx
+================================================================
+import { NavLink } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  MapPin,
+  Sprout,
+  PawPrint,
+  HeartPulse,
+  LandPlot,
+  Tractor,
+  Package,
+  CircleDollarSign,
+} from 'lucide-react'
+
+const navItems = [
+  {
+    to: '/dashboard',
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    to: '/animais',
+    label: 'Animais',
+    icon: PawPrint,
+  },
+  {
+    to: '/saude-animal',
+    label: 'Saúde Animal',
+    icon: HeartPulse,
+  },
+  {
+    to: '/terras',
+    label: 'Terras',
+    icon: LandPlot,
+  },
+  {
+    to: '/cultivos',
+    label: 'Cultivos',
+    icon: Sprout,
+  },
+  {
+    to: '/maquinas',
+    label: 'Máquinas',
+    icon: Tractor,
+  },
+  {
+    to: '/estoque',
+    label: 'Estoque',
+    icon: Package,
+  },
+  {
+    to: '/financeiro',
+    label: 'Financeiro',
+    icon: CircleDollarSign,
+  },
+  {
+    to: '/propriedade',
+    label: 'Propriedade',
+    icon: MapPin,
+  },
+]
+
+export default function Sidebar() {
+  return (
+    <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 z-30">
+      <div className="flex items-center gap-2 h-16 px-6 border-b border-gray-200 dark:border-gray-800">
+        <Sprout className="w-8 h-8 text-green-600" />
+
+        <span className="text-xl font-bold">
+          Agro360
+        </span>
+      </div>
+
+      <nav className="flex-1 py-4 px-3 space-y-1">
+        {navItems.map(item => {
+          const Icon = item.icon
+
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({
+                isActive,
+              }) =>
+                `flex items-center gap-3 px-4 py-2 rounded-lg transition ${
+                  isActive
+                    ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`
+              }
+            >
+              <Icon className="w-5 h-5" />
+              {item.label}
+            </NavLink>
+          )
+        })}
+      </nav>
+
+      <div className="p-4 border-t border-gray-200 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
+        Agro360 v0.1.0
+      </div>
+    </aside>
+  )
+}
+================================================================
+ARQUIVO: src/components/layout/MobileNav.tsx
+================================================================
+import { NavLink } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  MapPin,
+  Sprout,
+  PawPrint,
+  HeartPulse,
+  LandPlot,
+  Tractor,
+  Package,
+  CircleDollarSign,
+  X,
+} from 'lucide-react'
+
+const navItems = [
+  {
+    to: '/dashboard',
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    to: '/animais',
+    label: 'Animais',
+    icon: PawPrint,
+  },
+  {
+    to: '/saude-animal',
+    label: 'Saúde Animal',
+    icon: HeartPulse,
+  },
+  {
+    to: '/terras',
+    label: 'Terras',
+    icon: LandPlot,
+  },
+  {
+    to: '/cultivos',
+    label: 'Cultivos',
+    icon: Sprout,
+  },
+  {
+    to: '/maquinas',
+    label: 'Máquinas',
+    icon: Tractor,
+  },
+  {
+    to: '/estoque',
+    label: 'Estoque',
+    icon: Package,
+  },
+  {
+    to: '/financeiro',
+    label: 'Financeiro',
+    icon: CircleDollarSign,
+  },
+  {
+    to: '/propriedade',
+    label: 'Propriedade',
+    icon: MapPin,
+  },
+]
+
+export default function MobileNav({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
+  if (!open) {
+    return null
+  }
+
+  return (
+    <div className="fixed inset-0 z-40 lg:hidden">
+      <div
+        className="absolute inset-0 bg-black bg-opacity-50"
+        onClick={onClose}
+      />
+
+      <aside className="absolute inset-y-0 left-0 w-64 bg-white dark:bg-gray-900 shadow-xl">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center gap-2">
+            <Sprout className="w-7 h-7 text-green-600" />
+
+            <span className="text-lg font-bold">
+              Agro360
+            </span>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-1 rounded"
+            aria-label="Fechar menu"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <nav className="p-3 space-y-1">
+          {navItems.map(item => {
+            const Icon = item.icon
+
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={onClose}
+                className={({
+                  isActive,
+                }) =>
+                  `flex items-center gap-3 px-4 py-2 rounded-lg transition ${
+                    isActive
+                      ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`
+                }
+              >
+                <Icon className="w-5 h-5" />
+                {item.label}
+              </NavLink>
+            )
+          })}
+        </nav>
+      </aside>
+    </div>
+  )
+}
+================================================================
+ARQUIVO: src/routes/AppRoutes.tsx
+================================================================
+import {
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom'
+import AppLayout from '../components/layout/AppLayout'
+import Login from '../pages/Login'
+import Dashboard from '../pages/Dashboard'
+import Property from '../pages/Property'
+import NotFound from '../pages/NotFound'
+
+import AnimalsPage from '../pages/animals/AnimalsPage'
+import NewAnimalPage from '../pages/animals/NewAnimalPage'
+import AnimalDetailsPage from '../pages/animals/AnimalDetailsPage'
+import EditAnimalPage from '../pages/animals/EditAnimalPage'
+import LotsPage from '../pages/animals/LotsPage'
+
+import HealthPage from '../pages/health/HealthPage'
+import VaccinationsPage from '../pages/health/VaccinationsPage'
+import NewVaccinationPage from '../pages/health/NewVaccinationPage'
+import EditVaccinationPage from '../pages/health/EditVaccinationPage'
+import TreatmentsPage from '../pages/health/TreatmentsPage'
+import NewTreatmentPage from '../pages/health/NewTreatmentPage'
+import EditTreatmentPage from '../pages/health/EditTreatmentPage'
+import HealthOccurrencesPage from '../pages/health/HealthOccurrencesPage'
+import NewHealthOccurrencePage from '../pages/health/NewHealthOccurrencePage'
+import EditHealthOccurrencePage from '../pages/health/EditHealthOccurrencePage'
+
+import LandAreasPage from '../pages/land/LandAreasPage'
+import NewLandAreaPage from '../pages/land/NewLandAreaPage'
+import LandAreaDetailsPage from '../pages/land/LandAreaDetailsPage'
+import EditLandAreaPage from '../pages/land/EditLandAreaPage'
+import PaddockManagementPage from '../pages/land/PaddockManagementPage'
+import NewPaddockOccupationPage from '../pages/land/NewPaddockOccupationPage'
+import RuralStructuresPage from '../pages/land/RuralStructuresPage'
+import NewRuralStructurePage from '../pages/land/NewRuralStructurePage'
+import RuralStructureDetailsPage from '../pages/land/RuralStructureDetailsPage'
+import EditRuralStructurePage from '../pages/land/EditRuralStructurePage'
+import LandUseHistoryPage from '../pages/land/LandUseHistoryPage'
+import NewLandUseRecordPage from '../pages/land/NewLandUseRecordPage'
+import LandUseRecordDetailsPage from '../pages/land/LandUseRecordDetailsPage'
+import EditLandUseRecordPage from '../pages/land/EditLandUseRecordPage'
+
+import CropCyclesPage from '../pages/crops/CropCyclesPage'
+import NewCropCyclePage from '../pages/crops/NewCropCyclePage'
+import CropCycleDetailsPage from '../pages/crops/CropCycleDetailsPage'
+import EditCropCyclePage from '../pages/crops/EditCropCyclePage'
+import SoilAnalysesPage from '../pages/crops/SoilAnalysesPage'
+import NewSoilAnalysisPage from '../pages/crops/NewSoilAnalysisPage'
+import SoilAnalysisDetailsPage from '../pages/crops/SoilAnalysisDetailsPage'
+import EditSoilAnalysisPage from '../pages/crops/EditSoilAnalysisPage'
+import CropManagementsPage from '../pages/crops/CropManagementsPage'
+import NewCropManagementPage from '../pages/crops/NewCropManagementPage'
+import CropManagementDetailsPage from '../pages/crops/CropManagementDetailsPage'
+import EditCropManagementPage from '../pages/crops/EditCropManagementPage'
+import HarvestRecordsPage from '../pages/crops/HarvestRecordsPage'
+import NewHarvestRecordPage from '../pages/crops/NewHarvestRecordPage'
+import HarvestRecordDetailsPage from '../pages/crops/HarvestRecordDetailsPage'
+import EditHarvestRecordPage from '../pages/crops/EditHarvestRecordPage'
+import AgriculturalCycleOverviewPage from '../pages/crops/AgriculturalCycleOverviewPage'
+import AgriculturalCycleDetailsPage from '../pages/crops/AgriculturalCycleDetailsPage'
+
+import MachinesPage from '../pages/machines/MachinesPage'
+import NewMachinePage from '../pages/machines/NewMachinePage'
+import MachineDetailsPage from '../pages/machines/MachineDetailsPage'
+import EditMachinePage from '../pages/machines/EditMachinePage'
+import MachineMaintenanceRecordsPage from '../pages/machines/MachineMaintenanceRecordsPage'
+import NewMachineMaintenancePage from '../pages/machines/NewMachineMaintenancePage'
+import MachineMaintenanceDetailsPage from '../pages/machines/MachineMaintenanceDetailsPage'
+import EditMachineMaintenancePage from '../pages/machines/EditMachineMaintenancePage'
+import MachineUsageRecordsPage from '../pages/machines/MachineUsageRecordsPage'
+import NewMachineUsagePage from '../pages/machines/NewMachineUsagePage'
+import MachineUsageDetailsPage from '../pages/machines/MachineUsageDetailsPage'
+import EditMachineUsagePage from '../pages/machines/EditMachineUsagePage'
+
+import InventoryItemsPage from '../pages/inventory/InventoryItemsPage'
+import NewInventoryItemPage from '../pages/inventory/NewInventoryItemPage'
+import InventoryItemDetailsPage from '../pages/inventory/InventoryItemDetailsPage'
+import EditInventoryItemPage from '../pages/inventory/EditInventoryItemPage'
+import InventoryMovementsPage from '../pages/inventory/InventoryMovementsPage'
+import NewInventoryMovementPage from '../pages/inventory/NewInventoryMovementPage'
+import InventoryMovementDetailsPage from '../pages/inventory/InventoryMovementDetailsPage'
+import InventoryAlertsPage from '../pages/inventory/InventoryAlertsPage'
+
+import FinanceDashboardPage from '../pages/finance/FinanceDashboardPage'
+import FinancialCategoriesPage from '../pages/finance/FinancialCategoriesPage'
+import NewFinancialCategoryPage from '../pages/finance/NewFinancialCategoryPage'
+import EditFinancialCategoryPage from '../pages/finance/EditFinancialCategoryPage'
+import RevenuesPage from '../pages/finance/RevenuesPage'
+import NewRevenuePage from '../pages/finance/NewRevenuePage'
+import RevenueDetailsPage from '../pages/finance/RevenueDetailsPage'
+import EditRevenuePage from '../pages/finance/EditRevenuePage'
+import ExpensesPage from '../pages/finance/ExpensesPage'
+import NewExpensePage from '../pages/finance/NewExpensePage'
+import ExpenseDetailsPage from '../pages/finance/ExpenseDetailsPage'
+import EditExpensePage from '../pages/finance/EditExpensePage'
+
+import { ProtectedRoute } from '../components/common/ProtectedRoute'
+import { PublicOnlyRoute } from '../components/common/PublicOnlyRoute'
+
+export default function AppRoutes() {
+  return (
+    <Routes>
+      <Route element={<PublicOnlyRoute />}>
+        <Route path="/login" element={<Login />} />
+      </Route>
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+
+          <Route path="/propriedade" element={<Property />} />
+
+          <Route path="/animais" element={<AnimalsPage />} />
+          <Route path="/animais/novo" element={<NewAnimalPage />} />
+          <Route path="/animais/lotes" element={<LotsPage />} />
+          <Route path="/animais/:id" element={<AnimalDetailsPage />} />
+          <Route path="/animais/:id/editar" element={<EditAnimalPage />} />
+
+          <Route path="/saude-animal" element={<HealthPage />} />
+          <Route
+            path="/saude-animal/vacinacoes"
+            element={<VaccinationsPage />}
+          />
+          <Route
+            path="/saude-animal/vacinacoes/nova"
+            element={<NewVaccinationPage />}
+          />
+          <Route
+            path="/saude-animal/vacinacoes/:id/editar"
+            element={<EditVaccinationPage />}
+          />
+          <Route
+            path="/saude-animal/tratamentos"
+            element={<TreatmentsPage />}
+          />
+          <Route
+            path="/saude-animal/tratamentos/novo"
+            element={<NewTreatmentPage />}
+          />
+          <Route
+            path="/saude-animal/tratamentos/:id/editar"
+            element={<EditTreatmentPage />}
+          />
+          <Route
+            path="/saude-animal/ocorrencias"
+            element={<HealthOccurrencesPage />}
+          />
+          <Route
+            path="/saude-animal/ocorrencias/nova"
+            element={<NewHealthOccurrencePage />}
+          />
+          <Route
+            path="/saude-animal/ocorrencias/:id/editar"
+            element={<EditHealthOccurrencePage />}
+          />
+
+          <Route path="/terras" element={<LandAreasPage />} />
+          <Route path="/terras/nova" element={<NewLandAreaPage />} />
+          <Route path="/terras/manejo" element={<PaddockManagementPage />} />
+          <Route
+            path="/terras/manejo/nova"
+            element={<NewPaddockOccupationPage />}
+          />
+          <Route
+            path="/terras/estruturas"
+            element={<RuralStructuresPage />}
+          />
+          <Route
+            path="/terras/estruturas/nova"
+            element={<NewRuralStructurePage />}
+          />
+          <Route
+            path="/terras/estruturas/:id"
+            element={<RuralStructureDetailsPage />}
+          />
+          <Route
+            path="/terras/estruturas/:id/editar"
+            element={<EditRuralStructurePage />}
+          />
+          <Route path="/terras/historico" element={<LandUseHistoryPage />} />
+          <Route
+            path="/terras/historico/novo"
+            element={<NewLandUseRecordPage />}
+          />
+          <Route
+            path="/terras/historico/:id"
+            element={<LandUseRecordDetailsPage />}
+          />
+          <Route
+            path="/terras/historico/:id/editar"
+            element={<EditLandUseRecordPage />}
+          />
+          <Route path="/terras/:id" element={<LandAreaDetailsPage />} />
+          <Route
+            path="/terras/:id/editar"
+            element={<EditLandAreaPage />}
+          />
+
+          <Route path="/cultivos" element={<CropCyclesPage />} />
+          <Route path="/cultivos/novo" element={<NewCropCyclePage />} />
+          <Route path="/cultivos/solo" element={<SoilAnalysesPage />} />
+          <Route
+            path="/cultivos/solo/nova"
+            element={<NewSoilAnalysisPage />}
+          />
+          <Route
+            path="/cultivos/solo/:id"
+            element={<SoilAnalysisDetailsPage />}
+          />
+          <Route
+            path="/cultivos/solo/:id/editar"
+            element={<EditSoilAnalysisPage />}
+          />
+          <Route
+            path="/cultivos/manejos"
+            element={<CropManagementsPage />}
+          />
+          <Route
+            path="/cultivos/manejos/novo"
+            element={<NewCropManagementPage />}
+          />
+          <Route
+            path="/cultivos/manejos/:id"
+            element={<CropManagementDetailsPage />}
+          />
+          <Route
+            path="/cultivos/manejos/:id/editar"
+            element={<EditCropManagementPage />}
+          />
+          <Route
+            path="/cultivos/colheitas"
+            element={<HarvestRecordsPage />}
+          />
+          <Route
+            path="/cultivos/colheitas/nova"
+            element={<NewHarvestRecordPage />}
+          />
+          <Route
+            path="/cultivos/colheitas/:id"
+            element={<HarvestRecordDetailsPage />}
+          />
+          <Route
+            path="/cultivos/colheitas/:id/editar"
+            element={<EditHarvestRecordPage />}
+          />
+          <Route
+            path="/cultivos/ciclo-agricola"
+            element={<AgriculturalCycleOverviewPage />}
+          />
+          <Route
+            path="/cultivos/ciclo-agricola/:cropCycleId"
+            element={<AgriculturalCycleDetailsPage />}
+          />
+          <Route path="/cultivos/:id" element={<CropCycleDetailsPage />} />
+          <Route
+            path="/cultivos/:id/editar"
+            element={<EditCropCyclePage />}
+          />
+
+          <Route path="/maquinas" element={<MachinesPage />} />
+          <Route path="/maquinas/nova" element={<NewMachinePage />} />
+          <Route
+            path="/maquinas/manutencoes"
+            element={<MachineMaintenanceRecordsPage />}
+          />
+          <Route
+            path="/maquinas/manutencoes/nova"
+            element={<NewMachineMaintenancePage />}
+          />
+          <Route
+            path="/maquinas/manutencoes/:id"
+            element={<MachineMaintenanceDetailsPage />}
+          />
+          <Route
+            path="/maquinas/manutencoes/:id/editar"
+            element={<EditMachineMaintenancePage />}
+          />
+          <Route
+            path="/maquinas/utilizacoes"
+            element={<MachineUsageRecordsPage />}
+          />
+          <Route
+            path="/maquinas/utilizacoes/nova"
+            element={<NewMachineUsagePage />}
+          />
+          <Route
+            path="/maquinas/utilizacoes/:id"
+            element={<MachineUsageDetailsPage />}
+          />
+          <Route
+            path="/maquinas/utilizacoes/:id/editar"
+            element={<EditMachineUsagePage />}
+          />
+          <Route path="/maquinas/:id" element={<MachineDetailsPage />} />
+          <Route
+            path="/maquinas/:id/editar"
+            element={<EditMachinePage />}
+          />
+
+          <Route path="/estoque" element={<InventoryItemsPage />} />
+          <Route path="/estoque/novo" element={<NewInventoryItemPage />} />
+          <Route
+            path="/estoque/alertas"
+            element={<InventoryAlertsPage />}
+          />
+          <Route
+            path="/estoque/movimentacoes"
+            element={<InventoryMovementsPage />}
+          />
+          <Route
+            path="/estoque/movimentacoes/nova"
+            element={<NewInventoryMovementPage />}
+          />
+          <Route
+            path="/estoque/movimentacoes/:id"
+            element={<InventoryMovementDetailsPage />}
+          />
+          <Route
+            path="/estoque/:id"
+            element={<InventoryItemDetailsPage />}
+          />
+          <Route
+            path="/estoque/:id/editar"
+            element={<EditInventoryItemPage />}
+          />
+
+          <Route path="/financeiro" element={<FinanceDashboardPage />} />
+
+          <Route
+            path="/financeiro/categorias"
+            element={<FinancialCategoriesPage />}
+          />
+          <Route
+            path="/financeiro/categorias/nova"
+            element={<NewFinancialCategoryPage />}
+          />
+          <Route
+            path="/financeiro/categorias/:id/editar"
+            element={<EditFinancialCategoryPage />}
+          />
+
+          <Route
+            path="/financeiro/receitas"
+            element={<RevenuesPage />}
+          />
+          <Route
+            path="/financeiro/receitas/nova"
+            element={<NewRevenuePage />}
+          />
+          <Route
+            path="/financeiro/receitas/:id"
+            element={<RevenueDetailsPage />}
+          />
+          <Route
+            path="/financeiro/receitas/:id/editar"
+            element={<EditRevenuePage />}
+          />
+
+          <Route
+            path="/financeiro/despesas"
+            element={<ExpensesPage />}
+          />
+          <Route
+            path="/financeiro/despesas/nova"
+            element={<NewExpensePage />}
+          />
+          <Route
+            path="/financeiro/despesas/:id"
+            element={<ExpenseDetailsPage />}
+          />
+          <Route
+            path="/financeiro/despesas/:id/editar"
+            element={<EditExpensePage />}
+          />
+        </Route>
+      </Route>
+
+      <Route
+        path="/"
+        element={<Navigate to="/dashboard" replace />}
+      />
+
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  )
+}
+================================================================
+ARQUIVO: src/components/ui/Button.tsx
+================================================================
+import {
+  ButtonHTMLAttributes,
+  ReactNode,
+} from 'react'
+
+interface ButtonProps
+  extends ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode
+  variant?: 'primary' | 'secondary' | 'outline'
+}
+
+export default function Button({
+  children,
+  variant = 'primary',
+  className = '',
+  ...props
+}: ButtonProps) {
+  const base =
+    'px-4 py-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed'
+
+  const variants = {
+    primary:
+      'bg-green-600 text-white hover:bg-green-700',
+
+    secondary:
+      'bg-gray-200 text-gray-800 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600',
+
+    outline:
+      'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800',
+  }
+
+  return (
+    <button
+      className={`${base} ${variants[variant]} ${className}`}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+}
+================================================================
+ARQUIVO: src/components/ui/Card.tsx
+================================================================
+import { ReactNode } from 'react'
+
+interface CardProps {
+  children: ReactNode
+  className?: string
+}
+
+export default function Card({
+  children,
+  className = '',
+}: CardProps) {
+  return (
+    <div
+      className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 ${className}`}
+    >
+      {children}
+    </div>
+  )
+}
+================================================================
+ARQUIVO: src/components/ui/Input.tsx
+================================================================
+import { InputHTMLAttributes } from 'react'
+
+interface InputProps
+  extends InputHTMLAttributes<HTMLInputElement> {
+  label?: string
+}
+
+export default function Input({
+  label,
+  id,
+  className = '',
+  ...props
+}: InputProps) {
+  const inputId =
+    id ||
+    label
+      ?.toLowerCase()
+      .replace(/\s+/g, '-')
+
+  return (
+    <div>
+      {label && (
+        <label
+          htmlFor={inputId}
+          className="block text-sm font-medium mb-1"
+        >
+          {label}
+        </label>
+      )}
+
+      <input
+        id={inputId}
+        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500 dark:focus:ring-green-600 ${className}`}
+        {...props}
+      />
+    </div>
+  )
+}
+================================================================
+ARQUIVO: src/components/ui/PageFeedback.tsx
+================================================================
+import { useEffect, useRef } from 'react'
+
+type PageFeedbackType = 'success' | 'error' | 'warning' | 'info'
+
+interface PageFeedbackProps {
+  type: PageFeedbackType
+  message: string
+  className?: string
+}
+
+const pageFeedbackStyles: Record<PageFeedbackType, string> = {
+  success: 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+  error: 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+  warning: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300',
+  info: 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+}
+
+const pageFeedbackRoles: Record<PageFeedbackType, 'alert' | 'status'> = {
+  success: 'status',
+  error: 'alert',
+  warning: 'alert',
+  info: 'status',
+}
+
+export default function PageFeedback({
+  type,
+  message,
+  className = '',
+}: PageFeedbackProps) {
+  const feedbackRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!message) return
+
+    const frame = requestAnimationFrame(() => {
+      feedbackRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+
+    return () => cancelAnimationFrame(frame)
+  }, [message])
+
+  return (
+    <div
+      ref={feedbackRef}
+      role={pageFeedbackRoles[type]}
+      aria-live={type === 'error' || type === 'warning' ? 'assertive' : 'polite'}
+      className={`scroll-mt-20 p-4 rounded-lg ${pageFeedbackStyles[type]} ${className}`}
+    >
+      {message}
+    </div>
+  )
+}
+================================================================
+ARQUIVO: src/components/ui/HelpTip.tsx
+================================================================
+import { useState, useRef, useEffect, useLayoutEffect, useId } from 'react'
+import { HelpCircle } from 'lucide-react'
+
+interface HelpTipProps {
+  title: string
+  description: string
+  className?: string
+}
+
+const VIEWPORT_MARGIN = 16
+
+export default function HelpTip({
+  title,
+  description,
+  className = '',
+}: HelpTipProps) {
+  const [open, setOpen] = useState(false)
+  const [panelLeft, setPanelLeft] = useState<number>(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const panelId = useId()
+
+  useLayoutEffect(() => {
+    if (!open) return
+
+    const updatePosition = () => {
+      const container = containerRef.current
+      const button = buttonRef.current
+      const panel = panelRef.current
+
+      if (!container || !button || !panel) return
+
+      const containerRect = container.getBoundingClientRect()
+      const buttonRect = button.getBoundingClientRect()
+      const panelWidth = panel.offsetWidth
+
+      const buttonCenter = buttonRect.left + buttonRect.width / 2
+      let desiredLeftViewport = buttonCenter - panelWidth / 2
+
+      const minLeftViewport = VIEWPORT_MARGIN
+      const maxLeftViewport = Math.max(
+        VIEWPORT_MARGIN,
+        window.innerWidth - panelWidth - VIEWPORT_MARGIN
+      )
+
+      if (desiredLeftViewport < minLeftViewport) {
+        desiredLeftViewport = minLeftViewport
+      }
+
+      if (desiredLeftViewport > maxLeftViewport) {
+        desiredLeftViewport = maxLeftViewport
+      }
+
+      setPanelLeft(desiredLeftViewport - containerRect.left)
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(event.target as Node)
+      ) {
+        setOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className={`relative inline-flex ${className}`}>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={`Ajuda: ${title}`}
+        aria-expanded={open}
+        aria-controls={panelId}
+        aria-describedby={open ? panelId : undefined}
+        onClick={() => setOpen(prev => !prev)}
+        className="inline-flex items-center justify-center w-5 h-5 rounded-full text-gray-500 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+      >
+        <HelpCircle className="w-4 h-4" aria-hidden="true" />
+      </button>
+
+      {open && (
+        <div
+          ref={panelRef}
+          id={panelId}
+          role="tooltip"
+          style={{ left: panelLeft }}
+          className="absolute top-full mt-2 w-72 max-w-[calc(100vw-2rem)] z-50 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg text-sm"
+        >
+          <p className="font-semibold text-gray-900 dark:text-gray-100 mb-1">
+            {title}
+          </p>
+
+          <p className="text-gray-600 dark:text-gray-300 leading-snug">
+            {description}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}

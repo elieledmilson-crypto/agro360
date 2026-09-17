@@ -1,0 +1,6412 @@
+AGRO360 — ETAPA 14 — AUDITORIA DE CÓDIGO
+========================================================================
+
+
+========================================================================
+ARQUIVO: src/services/healthService.ts
+========================================================================
+
+import {
+  Vaccination,
+  Treatment,
+  HealthOccurrence,
+  VaccinationStatus,
+} from '../types'
+import {
+  getStorageItem,
+  setStorageItem,
+  generateId,
+} from './storage'
+import { hasInventoryMovementByOrigin } from './inventoryService'
+
+const VACCINATIONS_KEY =
+  'agro360_vaccinations'
+
+const TREATMENTS_KEY =
+  'agro360_treatments'
+
+const OCCURRENCES_KEY =
+  'agro360_health_occurrences'
+
+const INITIALIZED_KEY =
+  'agro360_health_initialized'
+
+const ANIMALS_KEY =
+  'agro360_animals'
+
+function initializeHealthIfNeeded(): void {
+  const initialized =
+    getStorageItem<boolean>(
+      INITIALIZED_KEY,
+      false,
+    )
+
+  if (!initialized) {
+    setStorageItem(
+      VACCINATIONS_KEY,
+      [],
+    )
+
+    setStorageItem(
+      TREATMENTS_KEY,
+      [],
+    )
+
+    setStorageItem(
+      OCCURRENCES_KEY,
+      [],
+    )
+
+    setStorageItem(
+      INITIALIZED_KEY,
+      true,
+    )
+  }
+}
+
+function assertAnimalExists(
+  animalId: string,
+): void {
+  const animals =
+    getStorageItem<
+      { id: string }[]
+    >(
+      ANIMALS_KEY,
+      [],
+    )
+
+  const exists = animals.some(
+    animal =>
+      animal.id === animalId,
+  )
+
+  if (!exists) {
+    throw new Error(
+      'Animal não encontrado.',
+    )
+  }
+}
+
+function vaccinationHasStockConsumption(
+  vaccinationId: string,
+): boolean {
+  return hasInventoryMovementByOrigin(
+    'health',
+    'vaccination',
+    vaccinationId,
+  )
+}
+
+function treatmentHasStockConsumption(
+  treatmentId: string,
+): boolean {
+  return hasInventoryMovementByOrigin(
+    'health',
+    'treatment',
+    treatmentId,
+  )
+}
+
+// VACINAÇÕES
+
+export function getVaccinations(): Vaccination[] {
+  initializeHealthIfNeeded()
+
+  return getStorageItem<
+    Vaccination[]
+  >(
+    VACCINATIONS_KEY,
+    [],
+  )
+}
+
+export function getVaccinationById(
+  id: string,
+): Vaccination | undefined {
+  return getVaccinations().find(
+    vaccination =>
+      vaccination.id === id,
+  )
+}
+
+export function createVaccination(
+  data: Omit<
+    Vaccination,
+    'id' | 'createdAt' | 'updatedAt'
+  >,
+): Vaccination {
+  assertAnimalExists(data.animalId)
+
+  const vaccinations =
+    getVaccinations()
+
+  const now =
+    new Date().toISOString()
+
+  const newVaccination: Vaccination =
+    {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    }
+
+  vaccinations.push(
+    newVaccination,
+  )
+
+  setStorageItem(
+    VACCINATIONS_KEY,
+    vaccinations,
+  )
+
+  return newVaccination
+}
+
+export function updateVaccination(
+  id: string,
+  data: Partial<Vaccination>,
+): Vaccination | undefined {
+  if (
+    data.animalId !== undefined
+  ) {
+    assertAnimalExists(
+      data.animalId,
+    )
+  }
+
+  const vaccinations =
+    getVaccinations()
+
+  const index =
+    vaccinations.findIndex(
+      vaccination =>
+        vaccination.id === id,
+    )
+
+  if (index === -1) {
+    return undefined
+  }
+
+  const current = vaccinations[index]
+
+  if (vaccinationHasStockConsumption(id)) {
+    const protectedFieldsChanged =
+      ('animalId' in data &&
+        data.animalId !== current.animalId) ||
+      ('vaccineName' in data &&
+        data.vaccineName !== current.vaccineName) ||
+      ('applicationDate' in data &&
+        data.applicationDate !== current.applicationDate) ||
+      ('dose' in data &&
+        data.dose !== current.dose) ||
+      ('batch' in data &&
+        data.batch !== current.batch)
+
+    if (protectedFieldsChanged) {
+      throw new Error(
+        'Não é possível alterar os dados principais desta vacinação porque ela possui baixa de estoque registrada.',
+      )
+    }
+  }
+
+  const updated: Vaccination = {
+    ...current,
+    ...data,
+    id: current.id,
+    createdAt: current.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  vaccinations[index] = updated
+
+  setStorageItem(
+    VACCINATIONS_KEY,
+    vaccinations,
+  )
+
+  return updated
+}
+
+export function deleteVaccination(
+  id: string,
+): boolean {
+  if (vaccinationHasStockConsumption(id)) {
+    throw new Error(
+      'Não é possível excluir esta vacinação porque ela possui baixa de estoque registrada.',
+    )
+  }
+
+  const vaccinations =
+    getVaccinations()
+
+  const filtered =
+    vaccinations.filter(
+      vaccination =>
+        vaccination.id !== id,
+    )
+
+  if (
+    filtered.length ===
+    vaccinations.length
+  ) {
+    return false
+  }
+
+  setStorageItem(
+    VACCINATIONS_KEY,
+    filtered,
+  )
+
+  return true
+}
+
+export function getVaccinationsByAnimal(
+  animalId: string,
+): Vaccination[] {
+  return getVaccinations()
+    .filter(
+      vaccination =>
+        vaccination.animalId ===
+        animalId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(
+          b.applicationDate,
+        ).getTime() -
+        new Date(
+          a.applicationDate,
+        ).getTime(),
+    )
+}
+
+export function animalHasVaccinationWithStockConsumption(
+  animalId: string,
+): boolean {
+  const vaccinations =
+    getVaccinationsByAnimal(animalId)
+
+  return vaccinations.some(
+    vaccination =>
+      vaccinationHasStockConsumption(
+        vaccination.id,
+      ),
+  )
+}
+
+export function getVaccinationStatus(
+  vaccination: Vaccination,
+): VaccinationStatus {
+  if (!vaccination.nextDoseDate) {
+    return 'Sem próxima dose'
+  }
+
+  const today = new Date()
+
+  today.setHours(
+    0,
+    0,
+    0,
+    0,
+  )
+
+  const nextDose = new Date(
+    vaccination.nextDoseDate +
+      'T00:00:00',
+  )
+
+  const diffDays = Math.ceil(
+    (
+      nextDose.getTime() -
+      today.getTime()
+    ) /
+      (
+        1000 *
+        60 *
+        60 *
+        24
+      ),
+  )
+
+  if (diffDays < 0) {
+    return 'Vencida'
+  }
+
+  if (diffDays <= 7) {
+    return 'Próxima'
+  }
+
+  return 'Em dia'
+}
+
+// TRATAMENTOS
+
+export function getTreatments(): Treatment[] {
+  initializeHealthIfNeeded()
+
+  return getStorageItem<
+    Treatment[]
+  >(
+    TREATMENTS_KEY,
+    [],
+  )
+}
+
+export function getTreatmentById(
+  id: string,
+): Treatment | undefined {
+  return getTreatments().find(
+    treatment =>
+      treatment.id === id,
+  )
+}
+
+export function createTreatment(
+  data: Omit<
+    Treatment,
+    'id' | 'createdAt' | 'updatedAt'
+  >,
+): Treatment {
+  assertAnimalExists(data.animalId)
+
+  const treatments =
+    getTreatments()
+
+  const now =
+    new Date().toISOString()
+
+  const newTreatment: Treatment = {
+    ...data,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  treatments.push(newTreatment)
+
+  setStorageItem(
+    TREATMENTS_KEY,
+    treatments,
+  )
+
+  return newTreatment
+}
+
+export function updateTreatment(
+  id: string,
+  data: Partial<Treatment>,
+): Treatment | undefined {
+  if (
+    data.animalId !== undefined
+  ) {
+    assertAnimalExists(
+      data.animalId,
+    )
+  }
+
+  const treatments =
+    getTreatments()
+
+  const index =
+    treatments.findIndex(
+      treatment =>
+        treatment.id === id,
+    )
+
+  if (index === -1) {
+    return undefined
+  }
+
+  const current = treatments[index]
+
+  // Proteção: se há baixa de estoque vinculada, campos principais não podem mudar.
+  // Usamos `in` para detectar presença real de propriedades opcionais,
+  // cobrindo chamadas como { medication: undefined }.
+  if (treatmentHasStockConsumption(id)) {
+    const protectedFieldsChanged =
+      ('animalId' in data &&
+        data.animalId !== current.animalId) ||
+      ('reason' in data &&
+        data.reason !== current.reason) ||
+      ('medication' in data &&
+        data.medication !== current.medication) ||
+      ('dosage' in data &&
+        data.dosage !== current.dosage) ||
+      ('startDate' in data &&
+        data.startDate !== current.startDate)
+
+    if (protectedFieldsChanged) {
+      throw new Error(
+        'Não é possível alterar os dados principais deste tratamento porque ele possui baixa de estoque registrada.',
+      )
+    }
+  }
+
+  const updated: Treatment = {
+    ...current,
+    ...data,
+    id: current.id,
+    createdAt: current.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  treatments[index] = updated
+
+  setStorageItem(
+    TREATMENTS_KEY,
+    treatments,
+  )
+
+  return updated
+}
+
+export function deleteTreatment(
+  id: string,
+): boolean {
+  if (treatmentHasStockConsumption(id)) {
+    throw new Error(
+      'Não é possível excluir este tratamento porque ele possui baixa de estoque registrada.',
+    )
+  }
+
+  const treatments =
+    getTreatments()
+
+  const filtered =
+    treatments.filter(
+      treatment =>
+        treatment.id !== id,
+    )
+
+  if (
+    filtered.length ===
+    treatments.length
+  ) {
+    return false
+  }
+
+  setStorageItem(
+    TREATMENTS_KEY,
+    filtered,
+  )
+
+  return true
+}
+
+export function getTreatmentsByAnimal(
+  animalId: string,
+): Treatment[] {
+  return getTreatments()
+    .filter(
+      treatment =>
+        treatment.animalId ===
+        animalId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(
+          b.startDate,
+        ).getTime() -
+        new Date(
+          a.startDate,
+        ).getTime(),
+    )
+}
+
+export function animalHasTreatmentWithStockConsumption(
+  animalId: string,
+): boolean {
+  const treatments =
+    getTreatmentsByAnimal(animalId)
+
+  return treatments.some(
+    treatment =>
+      treatmentHasStockConsumption(
+        treatment.id,
+      ),
+  )
+}
+
+// OCORRÊNCIAS
+
+export function getHealthOccurrences(): HealthOccurrence[] {
+  initializeHealthIfNeeded()
+
+  return getStorageItem<
+    HealthOccurrence[]
+  >(
+    OCCURRENCES_KEY,
+    [],
+  )
+}
+
+export function getHealthOccurrenceById(
+  id: string,
+): HealthOccurrence | undefined {
+  return getHealthOccurrences().find(
+    occurrence =>
+      occurrence.id === id,
+  )
+}
+
+export function createHealthOccurrence(
+  data: Omit<
+    HealthOccurrence,
+    'id' | 'createdAt' | 'updatedAt'
+  >,
+): HealthOccurrence {
+  assertAnimalExists(data.animalId)
+
+  const occurrences =
+    getHealthOccurrences()
+
+  const now =
+    new Date().toISOString()
+
+  const newOccurrence:
+    HealthOccurrence = {
+      ...data,
+      id: generateId(),
+      createdAt: now,
+      updatedAt: now,
+    }
+
+  occurrences.push(
+    newOccurrence,
+  )
+
+  setStorageItem(
+    OCCURRENCES_KEY,
+    occurrences,
+  )
+
+  return newOccurrence
+}
+
+export function updateHealthOccurrence(
+  id: string,
+  data: Partial<HealthOccurrence>,
+): HealthOccurrence | undefined {
+  if (
+    data.animalId !== undefined
+  ) {
+    assertAnimalExists(
+      data.animalId,
+    )
+  }
+
+  const occurrences =
+    getHealthOccurrences()
+
+  const index =
+    occurrences.findIndex(
+      occurrence =>
+        occurrence.id === id,
+    )
+
+  if (index === -1) {
+    return undefined
+  }
+
+  const updated:
+    HealthOccurrence = {
+      ...occurrences[index],
+      ...data,
+      id: occurrences[index].id,
+      createdAt:
+        occurrences[index]
+          .createdAt,
+      updatedAt:
+        new Date().toISOString(),
+    }
+
+  occurrences[index] = updated
+
+  setStorageItem(
+    OCCURRENCES_KEY,
+    occurrences,
+  )
+
+  return updated
+}
+
+export function deleteHealthOccurrence(
+  id: string,
+): boolean {
+  const occurrences =
+    getHealthOccurrences()
+
+  const filtered =
+    occurrences.filter(
+      occurrence =>
+        occurrence.id !== id,
+    )
+
+  if (
+    filtered.length ===
+    occurrences.length
+  ) {
+    return false
+  }
+
+  setStorageItem(
+    OCCURRENCES_KEY,
+    filtered,
+  )
+
+  return true
+}
+
+export function getHealthOccurrencesByAnimal(
+  animalId: string,
+): HealthOccurrence[] {
+  return getHealthOccurrences()
+    .filter(
+      occurrence =>
+        occurrence.animalId ===
+        animalId,
+    )
+    .sort(
+      (a, b) =>
+        new Date(
+          b.date,
+        ).getTime() -
+        new Date(
+          a.date,
+        ).getTime(),
+    )
+}
+
+export function getPendingVaccinationCount(): number {
+  const vaccinations =
+    getVaccinations()
+
+  return vaccinations.filter(
+    vaccination => {
+      const status =
+        getVaccinationStatus(
+          vaccination,
+        )
+
+      return (
+        status === 'Próxima' ||
+        status === 'Vencida'
+      )
+    },
+  ).length
+}
+
+========================================================================
+ARQUIVO: src/services/cropManagementService.ts
+========================================================================
+
+import {
+  CropManagement,
+  CropManagementType,
+} from '../types'
+import { getStorageItem, setStorageItem, generateId } from './storage'
+import {
+  getCropCycleById,
+  getCropCyclesByLandAreaId,
+} from './cropService'
+import { hasInventoryMovementByOrigin } from './inventoryService'
+
+const CROP_MANAGEMENTS_KEY = 'agro360_crop_managements'
+const INITIALIZED_KEY = 'agro360_crop_managements_initialized'
+
+const CROP_MANAGEMENT_TYPES: CropManagementType[] = [
+  'Adubação',
+  'Irrigação',
+  'Pulverização',
+  'Capina',
+  'Controle de plantas daninhas',
+  'Controle de pragas',
+  'Controle de doenças',
+  'Manejo cultural',
+  'Outro',
+]
+
+type CropManagementInput = Omit<
+  CropManagement,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+function initializeCropManagementsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(INITIALIZED_KEY, false)
+
+  if (!initialized) {
+    setStorageItem(CROP_MANAGEMENTS_KEY, [])
+    setStorageItem(INITIALIZED_KEY, true)
+  }
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  if (value === undefined) return true
+  return typeof value === 'string'
+}
+
+function isValidCivilDate(dateString: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false
+
+  const [year, month, day] = dateString.split('-').map(Number)
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return false
+  }
+
+  if (month < 1 || month > 12) return false
+
+  const daysInMonth = (() => {
+    switch (month) {
+      case 1:
+        return 31
+      case 2: {
+        const isLeapYear =
+          year % 400 === 0 ||
+          (year % 4 === 0 && year % 100 !== 0)
+
+        return isLeapYear ? 29 : 28
+      }
+      case 3:
+        return 31
+      case 4:
+        return 30
+      case 5:
+        return 31
+      case 6:
+        return 30
+      case 7:
+        return 31
+      case 8:
+        return 31
+      case 9:
+        return 30
+      case 10:
+        return 31
+      case 11:
+        return 30
+      case 12:
+        return 31
+      default:
+        return 0
+    }
+  })()
+
+  return day >= 1 && day <= daysInMonth
+}
+
+function isCropManagement(value: unknown): value is CropManagement {
+  if (!value || typeof value !== 'object') return false
+
+  const obj = value as Record<string, unknown>
+
+  return (
+    isNonEmptyString(obj.id) &&
+    isNonEmptyString(obj.cropCycleId) &&
+    typeof obj.date === 'string' &&
+    isValidCivilDate(obj.date) &&
+    typeof obj.type === 'string' &&
+    CROP_MANAGEMENT_TYPES.includes(obj.type as CropManagementType) &&
+    isNonEmptyString(obj.description) &&
+    isOptionalString(obj.productOrMaterial) &&
+    isOptionalString(obj.doseOrQuantity) &&
+    isOptionalString(obj.responsible) &&
+    isOptionalString(obj.notes) &&
+    typeof obj.createdAt === 'string' &&
+    typeof obj.updatedAt === 'string'
+  )
+}
+
+function validateAndNormalizeCropManagementInput(
+  data: CropManagementInput
+): CropManagementInput {
+  const cropCycleId = data.cropCycleId.trim()
+
+  if (!cropCycleId) {
+    throw new Error('Cultivo é obrigatório.')
+  }
+
+  const cropCycle = getCropCycleById(cropCycleId)
+
+  if (!cropCycle) {
+    throw new Error('Cultivo não encontrado.')
+  }
+
+  const date = data.date.trim()
+
+  if (!date) {
+    throw new Error('Informe a data do manejo.')
+  }
+
+  if (!isValidCivilDate(date)) {
+    throw new Error('Data do manejo inválida.')
+  }
+
+  if (!CROP_MANAGEMENT_TYPES.includes(data.type)) {
+    throw new Error('Tipo de manejo inválido.')
+  }
+
+  const description = data.description.trim()
+
+  if (!description) {
+    throw new Error('Descrição é obrigatória.')
+  }
+
+  return {
+    cropCycleId,
+    date,
+    type: data.type,
+    description,
+    productOrMaterial:
+      data.productOrMaterial?.trim() || undefined,
+    doseOrQuantity:
+      data.doseOrQuantity?.trim() || undefined,
+    responsible:
+      data.responsible?.trim() || undefined,
+    notes:
+      data.notes?.trim() || undefined,
+  }
+}
+
+export function getCropManagements(): CropManagement[] {
+  initializeCropManagementsIfNeeded()
+
+  const raw = getStorageItem<unknown>(
+    CROP_MANAGEMENTS_KEY,
+    []
+  )
+
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .filter(isCropManagement)
+    .sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date)
+
+      if (dateCompare !== 0) return dateCompare
+
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+}
+
+export function getCropManagementById(
+  id: string
+): CropManagement | undefined {
+  return getCropManagements().find(
+    management => management.id === id
+  )
+}
+
+export function getCropManagementsByCropCycleId(
+  cropCycleId: string
+): CropManagement[] {
+  return getCropManagements().filter(
+    management => management.cropCycleId === cropCycleId
+  )
+}
+
+export function getCropManagementsByLandAreaId(
+  landAreaId: string
+): CropManagement[] {
+  const cropCycles = getCropCyclesByLandAreaId(landAreaId)
+  const cropCycleIds = new Set(cropCycles.map(cycle => cycle.id))
+
+  return getCropManagements().filter(
+    management => cropCycleIds.has(management.cropCycleId)
+  )
+}
+
+export function createCropManagement(
+  data: CropManagementInput
+): CropManagement {
+  initializeCropManagementsIfNeeded()
+
+  const normalized =
+    validateAndNormalizeCropManagementInput(data)
+
+  const managements = getCropManagements()
+  const now = new Date().toISOString()
+
+  const newCropManagement: CropManagement = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  managements.push(newCropManagement)
+
+  setStorageItem(
+    CROP_MANAGEMENTS_KEY,
+    managements
+  )
+
+  return newCropManagement
+}
+
+export function updateCropManagement(
+  id: string,
+  data: CropManagementInput
+): CropManagement | undefined {
+  const managements = getCropManagements()
+
+  const index = managements.findIndex(
+    management => management.id === id
+  )
+
+  if (index === -1) return undefined
+
+  const oldManagement = managements[index]
+
+  if (
+    hasInventoryMovementByOrigin(
+      'crops',
+      'crop-management',
+      id
+    )
+  ) {
+    const protectedFieldsChanged =
+      data.cropCycleId !== oldManagement.cropCycleId ||
+      data.date !== oldManagement.date ||
+      data.type !== oldManagement.type
+
+    if (protectedFieldsChanged) {
+      throw new Error(
+        'Não é possível alterar os dados principais deste manejo porque ele possui baixa de estoque registrada.'
+      )
+    }
+  }
+
+  const normalized =
+    validateAndNormalizeCropManagementInput(data)
+
+  const updatedCropManagement: CropManagement = {
+    ...normalized,
+    id: oldManagement.id,
+    createdAt: oldManagement.createdAt,
+    updatedAt: new Date().toISOString(),
+  }
+
+  managements[index] = updatedCropManagement
+
+  setStorageItem(
+    CROP_MANAGEMENTS_KEY,
+    managements
+  )
+
+  return updatedCropManagement
+}
+
+export function deleteCropManagement(id: string): boolean {
+  if (
+    hasInventoryMovementByOrigin(
+      'crops',
+      'crop-management',
+      id
+    )
+  ) {
+    throw new Error(
+      'Não é possível excluir este manejo porque ele possui baixa de estoque registrada.'
+    )
+  }
+
+  const managements = getCropManagements()
+
+  const filtered = managements.filter(
+    management => management.id !== id
+  )
+
+  if (filtered.length === managements.length) {
+    return false
+  }
+
+  setStorageItem(
+    CROP_MANAGEMENTS_KEY,
+    filtered
+  )
+
+  return true
+}
+
+export function getCropManagementsCount(): number {
+  return getCropManagements().length
+}
+
+export function getCropManagementsCountByCropCycleId(
+  cropCycleId: string
+): number {
+  return getCropManagementsByCropCycleId(cropCycleId).length
+}
+
+export function cropCycleHasManagementWithStockConsumption(
+  cropCycleId: string
+): boolean {
+  const managements =
+    getCropManagementsByCropCycleId(cropCycleId)
+
+  return managements.some(
+    management =>
+      hasInventoryMovementByOrigin(
+        'crops',
+        'crop-management',
+        management.id
+      )
+  )
+}
+
+========================================================================
+ARQUIVO: src/services/machineMaintenanceService.ts
+========================================================================
+
+import {
+  MachineMaintenanceRecord,
+  MachineMaintenanceType,
+} from '../types'
+import {
+  getStorageItem,
+  setStorageItem,
+  generateId,
+} from './storage'
+import { getMachineById } from './machineService'
+import { hasInventoryMovementByOrigin } from './inventoryService'
+
+const MAINTENANCE_RECORDS_KEY =
+  'agro360_machine_maintenance_records'
+
+const INITIALIZED_KEY =
+  'agro360_machine_maintenance_records_initialized'
+
+const VALID_TYPES: MachineMaintenanceType[] = [
+  'Preventiva',
+  'Corretiva',
+  'Inspeção',
+  'Lubrificação',
+  'Troca de óleo',
+  'Troca de filtros',
+  'Reparo',
+  'Outro',
+]
+
+type MachineMaintenanceInput = Omit<
+  MachineMaintenanceRecord,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+function initializeMaintenanceRecordsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(
+    INITIALIZED_KEY,
+    false
+  )
+
+  if (!initialized) {
+    setStorageItem(
+      MAINTENANCE_RECORDS_KEY,
+      []
+    )
+
+    setStorageItem(
+      INITIALIZED_KEY,
+      true
+    )
+  }
+}
+
+function isNonEmptyString(
+  value: unknown
+): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0
+  )
+}
+
+function isOptionalString(
+  value: unknown
+): value is string | undefined {
+  if (value === undefined) return true
+
+  return typeof value === 'string'
+}
+
+function isOptionalNonNegativeNumber(
+  value: unknown
+): value is number | undefined {
+  if (value === undefined) return true
+
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0
+  )
+}
+
+function isValidCivilDate(
+  dateString: string
+): boolean {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateString)
+  ) {
+    return false
+  }
+
+  const [year, month, day] =
+    dateString.split('-').map(Number)
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return false
+  }
+
+  if (month < 1 || month > 12) {
+    return false
+  }
+
+  const daysInMonth = (() => {
+    switch (month) {
+      case 1:
+        return 31
+
+      case 2: {
+        const isLeapYear =
+          year % 400 === 0 ||
+          (
+            year % 4 === 0 &&
+            year % 100 !== 0
+          )
+
+        return isLeapYear ? 29 : 28
+      }
+
+      case 3:
+        return 31
+      case 4:
+        return 30
+      case 5:
+        return 31
+      case 6:
+        return 30
+      case 7:
+        return 31
+      case 8:
+        return 31
+      case 9:
+        return 30
+      case 10:
+        return 31
+      case 11:
+        return 30
+      case 12:
+        return 31
+      default:
+        return 0
+    }
+  })()
+
+  return day >= 1 && day <= daysInMonth
+}
+
+function isMachineMaintenanceRecord(
+  value: unknown
+): value is MachineMaintenanceRecord {
+  if (
+    !value ||
+    typeof value !== 'object'
+  ) {
+    return false
+  }
+
+  const obj =
+    value as Record<string, unknown>
+
+  return (
+    isNonEmptyString(obj.id) &&
+    isNonEmptyString(obj.machineId) &&
+    typeof obj.maintenanceDate === 'string' &&
+    isValidCivilDate(obj.maintenanceDate) &&
+    typeof obj.type === 'string' &&
+    VALID_TYPES.includes(
+      obj.type as MachineMaintenanceType
+    ) &&
+    isOptionalNonNegativeNumber(
+      obj.hourMeter
+    ) &&
+    isNonEmptyString(
+      obj.servicePerformed
+    ) &&
+    isOptionalString(obj.responsible) &&
+    isOptionalString(obj.notes) &&
+    typeof obj.createdAt === 'string' &&
+    typeof obj.updatedAt === 'string'
+  )
+}
+
+function validateAndNormalizeMaintenanceInput(
+  data: MachineMaintenanceInput
+): MachineMaintenanceInput {
+  const machineId =
+    data.machineId.trim()
+
+  if (!machineId) {
+    throw new Error(
+      'Máquina ou equipamento é obrigatório.'
+    )
+  }
+
+  const machine =
+    getMachineById(machineId)
+
+  if (!machine) {
+    throw new Error(
+      'Máquina ou equipamento não encontrado.'
+    )
+  }
+
+  const maintenanceDate =
+    data.maintenanceDate.trim()
+
+  if (!maintenanceDate) {
+    throw new Error(
+      'Informe a data da manutenção.'
+    )
+  }
+
+  if (
+    !isValidCivilDate(
+      maintenanceDate
+    )
+  ) {
+    throw new Error(
+      'Data da manutenção inválida.'
+    )
+  }
+
+  if (
+    !VALID_TYPES.includes(
+      data.type
+    )
+  ) {
+    throw new Error(
+      'Tipo de manutenção inválido.'
+    )
+  }
+
+  const servicePerformed =
+    data.servicePerformed.trim()
+
+  if (!servicePerformed) {
+    throw new Error(
+      'Serviço realizado é obrigatório.'
+    )
+  }
+
+  const hourMeter =
+    data.hourMeter
+
+  if (
+    hourMeter !== undefined
+  ) {
+    if (
+      typeof hourMeter !== 'number' ||
+      !Number.isFinite(hourMeter) ||
+      hourMeter < 0
+    ) {
+      throw new Error(
+        'Horímetro da manutenção inválido.'
+      )
+    }
+  }
+
+  return {
+    machineId,
+    maintenanceDate,
+    type: data.type,
+    hourMeter,
+    servicePerformed,
+    responsible:
+      data.responsible?.trim() || undefined,
+    notes:
+      data.notes?.trim() || undefined,
+  }
+}
+
+function getRawMaintenanceEntries(): unknown[] {
+  initializeMaintenanceRecordsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      MAINTENANCE_RECORDS_KEY,
+      []
+    )
+
+  return Array.isArray(raw)
+    ? [...raw]
+    : []
+}
+
+export function getMachineMaintenanceRecords():
+  MachineMaintenanceRecord[] {
+  initializeMaintenanceRecordsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      MAINTENANCE_RECORDS_KEY,
+      []
+    )
+
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .filter(
+      isMachineMaintenanceRecord
+    )
+    .sort((a, b) => {
+      const dateCompare =
+        b.maintenanceDate.localeCompare(
+          a.maintenanceDate
+        )
+
+      if (dateCompare !== 0) {
+        return dateCompare
+      }
+
+      return b.createdAt.localeCompare(
+        a.createdAt
+      )
+    })
+}
+
+export function getMachineMaintenanceRecordById(
+  id: string
+): MachineMaintenanceRecord | undefined {
+  return getMachineMaintenanceRecords().find(
+    record => record.id === id
+  )
+}
+
+export function getMachineMaintenanceRecordsByMachineId(
+  machineId: string
+): MachineMaintenanceRecord[] {
+  return getMachineMaintenanceRecords().filter(
+    record =>
+      record.machineId === machineId
+  )
+}
+
+export function createMachineMaintenanceRecord(
+  data: MachineMaintenanceInput
+): MachineMaintenanceRecord {
+  const normalized =
+    validateAndNormalizeMaintenanceInput(
+      data
+    )
+
+  const rawEntries =
+    getRawMaintenanceEntries()
+
+  const now =
+    new Date().toISOString()
+
+  const newRecord:
+    MachineMaintenanceRecord = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  rawEntries.push(
+    newRecord
+  )
+
+  setStorageItem(
+    MAINTENANCE_RECORDS_KEY,
+    rawEntries
+  )
+
+  return newRecord
+}
+
+export function updateMachineMaintenanceRecord(
+  id: string,
+  data: MachineMaintenanceInput
+): MachineMaintenanceRecord | undefined {
+  const currentRecord =
+    getMachineMaintenanceRecordById(
+      id
+    )
+
+  if (!currentRecord) {
+    return undefined
+  }
+
+  if (
+    hasInventoryMovementByOrigin(
+      'machines',
+      'machine-maintenance',
+      id
+    )
+  ) {
+    const protectedFieldsChanged =
+      data.machineId !==
+        currentRecord.machineId ||
+      data.maintenanceDate !==
+        currentRecord.maintenanceDate ||
+      data.type !==
+        currentRecord.type
+
+    if (protectedFieldsChanged) {
+      throw new Error(
+        'Não é possível alterar os dados principais desta manutenção porque ela possui baixa de estoque registrada.'
+      )
+    }
+  }
+
+  const normalized =
+    validateAndNormalizeMaintenanceInput(
+      data
+    )
+
+  const rawEntries =
+    getRawMaintenanceEntries()
+
+  const targetIndex =
+    rawEntries.findIndex(
+      item =>
+        isMachineMaintenanceRecord(
+          item
+        ) &&
+        item.id === id
+    )
+
+  if (
+    targetIndex === -1
+  ) {
+    return undefined
+  }
+
+  const updatedRecord:
+    MachineMaintenanceRecord = {
+    ...normalized,
+    id: currentRecord.id,
+    createdAt:
+      currentRecord.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  rawEntries[targetIndex] =
+    updatedRecord
+
+  setStorageItem(
+    MAINTENANCE_RECORDS_KEY,
+    rawEntries
+  )
+
+  return updatedRecord
+}
+
+export function deleteMachineMaintenanceRecord(
+  id: string
+): boolean {
+  if (
+    hasInventoryMovementByOrigin(
+      'machines',
+      'machine-maintenance',
+      id
+    )
+  ) {
+    throw new Error(
+      'Não é possível excluir esta manutenção porque ela possui baixa de estoque registrada.'
+    )
+  }
+
+  const rawEntries =
+    getRawMaintenanceEntries()
+
+  const targetIndex =
+    rawEntries.findIndex(
+      item =>
+        isMachineMaintenanceRecord(
+          item
+        ) &&
+        item.id === id
+    )
+
+  if (
+    targetIndex === -1
+  ) {
+    return false
+  }
+
+  rawEntries.splice(
+    targetIndex,
+    1
+  )
+
+  setStorageItem(
+    MAINTENANCE_RECORDS_KEY,
+    rawEntries
+  )
+
+  return true
+}
+
+export function getMachineMaintenanceRecordsCount():
+  number {
+  return getMachineMaintenanceRecords().length
+}
+
+export function getMachineMaintenanceRecordsCountByMachineId(
+  machineId: string
+): number {
+  return getMachineMaintenanceRecordsByMachineId(
+    machineId
+  ).length
+}
+
+export function getMachineMaintenanceRecordsByType(
+  type: MachineMaintenanceType
+): MachineMaintenanceRecord[] {
+  return getMachineMaintenanceRecords().filter(
+    record =>
+      record.type === type
+  )
+}
+
+export function machineHasMaintenanceWithStockConsumption(
+  machineId: string
+): boolean {
+  const records =
+    getMachineMaintenanceRecordsByMachineId(
+      machineId
+    )
+
+  return records.some(
+    record =>
+      hasInventoryMovementByOrigin(
+        'machines',
+        'machine-maintenance',
+        record.id
+      )
+  )
+}
+
+========================================================================
+ARQUIVO: src/services/machineUsageService.ts
+========================================================================
+
+import {
+  MachineUsageRecord,
+  MachineOperationType,
+} from '../types'
+import {
+  getStorageItem,
+  setStorageItem,
+  generateId,
+} from './storage'
+import { getMachineById } from './machineService'
+import { getLandAreaById } from './landService'
+import { getCropCycleById } from './cropService'
+
+const MACHINE_USAGE_RECORDS_KEY =
+  'agro360_machine_usage_records'
+
+const INITIALIZED_KEY =
+  'agro360_machine_usage_records_initialized'
+
+const VALID_OPERATION_TYPES:
+  MachineOperationType[] = [
+  'Preparo do solo',
+  'Plantio',
+  'Semeadura',
+  'Adubação',
+  'Pulverização',
+  'Colheita',
+  'Roçada',
+  'Irrigação',
+  'Transporte',
+  'Outro',
+]
+
+type MachineUsageInput = Omit<
+  MachineUsageRecord,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+function initializeMachineUsageRecordsIfNeeded(): void {
+  const initialized =
+    getStorageItem<boolean>(
+      INITIALIZED_KEY,
+      false
+    )
+
+  if (!initialized) {
+    setStorageItem(
+      MACHINE_USAGE_RECORDS_KEY,
+      []
+    )
+
+    setStorageItem(
+      INITIALIZED_KEY,
+      true
+    )
+  }
+}
+
+function isNonEmptyString(
+  value: unknown
+): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0
+  )
+}
+
+function isOptionalNonEmptyString(
+  value: unknown
+): value is string | undefined {
+  if (value === undefined) return true
+
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0
+  )
+}
+
+function isOptionalString(
+  value: unknown
+): value is string | undefined {
+  if (value === undefined) return true
+  return typeof value === 'string'
+}
+
+function isValidCivilDate(
+  dateString: string
+): boolean {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(dateString)
+  ) {
+    return false
+  }
+
+  const [year, month, day] =
+    dateString.split('-').map(Number)
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return false
+  }
+
+  if (month < 1 || month > 12) {
+    return false
+  }
+
+  const daysInMonth = (() => {
+    switch (month) {
+      case 1:
+        return 31
+
+      case 2: {
+        const isLeapYear =
+          year % 400 === 0 ||
+          (year % 4 === 0 &&
+            year % 100 !== 0)
+
+        return isLeapYear ? 29 : 28
+      }
+
+      case 3:
+        return 31
+      case 4:
+        return 30
+      case 5:
+        return 31
+      case 6:
+        return 30
+      case 7:
+        return 31
+      case 8:
+        return 31
+      case 9:
+        return 30
+      case 10:
+        return 31
+      case 11:
+        return 30
+      case 12:
+        return 31
+      default:
+        return 0
+    }
+  })()
+
+  return (
+    day >= 1 &&
+    day <= daysInMonth
+  )
+}
+
+function isMachineUsageRecord(
+  value: unknown
+): value is MachineUsageRecord {
+  if (
+    !value ||
+    typeof value !== 'object'
+  ) {
+    return false
+  }
+
+  const obj =
+    value as Record<string, unknown>
+
+  return (
+    isNonEmptyString(obj.id) &&
+    isNonEmptyString(obj.machineId) &&
+    isNonEmptyString(obj.landAreaId) &&
+    isOptionalNonEmptyString(
+      obj.cropCycleId
+    ) &&
+    typeof obj.operationDate ===
+      'string' &&
+    isValidCivilDate(
+      obj.operationDate
+    ) &&
+    typeof obj.operationType ===
+      'string' &&
+    VALID_OPERATION_TYPES.includes(
+      obj.operationType as
+        MachineOperationType
+    ) &&
+    typeof obj.workedHours ===
+      'number' &&
+    Number.isFinite(obj.workedHours) &&
+    obj.workedHours > 0 &&
+    isOptionalString(obj.notes) &&
+    typeof obj.createdAt ===
+      'string' &&
+    typeof obj.updatedAt ===
+      'string'
+  )
+}
+
+function validateAndNormalizeMachineUsageInput(
+  data: MachineUsageInput
+): MachineUsageInput {
+  const machineId =
+    data.machineId.trim()
+
+  if (!machineId) {
+    throw new Error(
+      'Máquina ou equipamento é obrigatório.'
+    )
+  }
+
+  const machine =
+    getMachineById(machineId)
+
+  if (!machine) {
+    throw new Error(
+      'Máquina ou equipamento não encontrado.'
+    )
+  }
+
+  const landAreaId =
+    data.landAreaId.trim()
+
+  if (!landAreaId) {
+    throw new Error(
+      'Talhão é obrigatório.'
+    )
+  }
+
+  const landArea =
+    getLandAreaById(landAreaId)
+
+  if (!landArea) {
+    throw new Error(
+      'Talhão não encontrado.'
+    )
+  }
+
+  if (landArea.type !== 'Talhão') {
+    throw new Error(
+      'A área selecionada deve ser um talhão.'
+    )
+  }
+
+  let cropCycleId:
+    string | undefined
+
+  if (
+    data.cropCycleId !== undefined
+  ) {
+    cropCycleId =
+      data.cropCycleId.trim()
+
+    if (!cropCycleId) {
+      cropCycleId = undefined
+    } else {
+      const cropCycle =
+        getCropCycleById(cropCycleId)
+
+      if (!cropCycle) {
+        throw new Error(
+          'Cultivo não encontrado.'
+        )
+      }
+
+      if (
+        cropCycle.landAreaId !==
+        landAreaId
+      ) {
+        throw new Error(
+          'O cultivo selecionado não pertence ao talhão informado.'
+        )
+      }
+    }
+  }
+
+  const operationDate =
+    data.operationDate.trim()
+
+  if (!operationDate) {
+    throw new Error(
+      'Informe a data da utilização.'
+    )
+  }
+
+  if (
+    !isValidCivilDate(operationDate)
+  ) {
+    throw new Error(
+      'Data da utilização inválida.'
+    )
+  }
+
+  if (
+    !VALID_OPERATION_TYPES.includes(
+      data.operationType
+    )
+  ) {
+    throw new Error(
+      'Tipo de operação inválido.'
+    )
+  }
+
+  const workedHours =
+    data.workedHours
+
+  if (
+    typeof workedHours !== 'number' ||
+    !Number.isFinite(workedHours) ||
+    workedHours <= 0
+  ) {
+    throw new Error(
+      'Horas trabalhadas devem ser maiores que zero.'
+    )
+  }
+
+  return {
+    machineId,
+    landAreaId,
+    cropCycleId,
+    operationDate,
+    operationType:
+      data.operationType,
+    workedHours,
+    notes:
+      data.notes?.trim() || undefined,
+  }
+}
+
+function getRawMachineUsageEntries():
+  unknown[] {
+  initializeMachineUsageRecordsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      MACHINE_USAGE_RECORDS_KEY,
+      []
+    )
+
+  return Array.isArray(raw)
+    ? [...raw]
+    : []
+}
+
+export function getMachineUsageRecords():
+  MachineUsageRecord[] {
+  initializeMachineUsageRecordsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      MACHINE_USAGE_RECORDS_KEY,
+      []
+    )
+
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .filter(isMachineUsageRecord)
+    .sort((a, b) => {
+      const dateCompare =
+        b.operationDate.localeCompare(
+          a.operationDate
+        )
+
+      if (dateCompare !== 0) {
+        return dateCompare
+      }
+
+      return b.createdAt.localeCompare(
+        a.createdAt
+      )
+    })
+}
+
+export function getMachineUsageRecordById(
+  id: string
+): MachineUsageRecord | undefined {
+  return getMachineUsageRecords().find(
+    record => record.id === id
+  )
+}
+
+export function getMachineUsageRecordsByMachineId(
+  machineId: string
+): MachineUsageRecord[] {
+  return getMachineUsageRecords().filter(
+    record =>
+      record.machineId === machineId
+  )
+}
+
+export function getMachineUsageRecordsByLandAreaId(
+  landAreaId: string
+): MachineUsageRecord[] {
+  return getMachineUsageRecords().filter(
+    record =>
+      record.landAreaId === landAreaId
+  )
+}
+
+export function getMachineUsageRecordsByCropCycleId(
+  cropCycleId: string
+): MachineUsageRecord[] {
+  return getMachineUsageRecords().filter(
+    record =>
+      record.cropCycleId === cropCycleId
+  )
+}
+
+export function createMachineUsageRecord(
+  data: MachineUsageInput
+): MachineUsageRecord {
+  const normalized =
+    validateAndNormalizeMachineUsageInput(
+      data
+    )
+
+  const rawEntries =
+    getRawMachineUsageEntries()
+
+  const now =
+    new Date().toISOString()
+
+  const newRecord:
+    MachineUsageRecord = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  rawEntries.push(newRecord)
+
+  setStorageItem(
+    MACHINE_USAGE_RECORDS_KEY,
+    rawEntries
+  )
+
+  return newRecord
+}
+
+export function updateMachineUsageRecord(
+  id: string,
+  data: MachineUsageInput
+): MachineUsageRecord | undefined {
+  const currentRecord =
+    getMachineUsageRecordById(id)
+
+  if (!currentRecord) {
+    return undefined
+  }
+
+  const normalized =
+    validateAndNormalizeMachineUsageInput(
+      data
+    )
+
+  const rawEntries =
+    getRawMachineUsageEntries()
+
+  const targetIndex =
+    rawEntries.findIndex(
+      item =>
+        isMachineUsageRecord(item) &&
+        item.id === id
+    )
+
+  if (targetIndex === -1) {
+    return undefined
+  }
+
+  const updatedRecord:
+    MachineUsageRecord = {
+    ...normalized,
+    id: currentRecord.id,
+    createdAt:
+      currentRecord.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  rawEntries[targetIndex] =
+    updatedRecord
+
+  setStorageItem(
+    MACHINE_USAGE_RECORDS_KEY,
+    rawEntries
+  )
+
+  return updatedRecord
+}
+
+export function deleteMachineUsageRecord(
+  id: string
+): boolean {
+  const rawEntries =
+    getRawMachineUsageEntries()
+
+  const targetIndex =
+    rawEntries.findIndex(
+      item =>
+        isMachineUsageRecord(item) &&
+        item.id === id
+    )
+
+  if (targetIndex === -1) {
+    return false
+  }
+
+  rawEntries.splice(targetIndex, 1)
+
+  setStorageItem(
+    MACHINE_USAGE_RECORDS_KEY,
+    rawEntries
+  )
+
+  return true
+}
+
+export function getMachineUsageRecordsCount():
+  number {
+  return getMachineUsageRecords().length
+}
+
+export function getMachineUsageRecordsCountByMachineId(
+  machineId: string
+): number {
+  return getMachineUsageRecordsByMachineId(
+    machineId
+  ).length
+}
+
+export function getMachineUsageRecordsCountByLandAreaId(
+  landAreaId: string
+): number {
+  return getMachineUsageRecordsByLandAreaId(
+    landAreaId
+  ).length
+}
+
+export function getMachineUsageRecordsCountByCropCycleId(
+  cropCycleId: string
+): number {
+  return getMachineUsageRecordsByCropCycleId(
+    cropCycleId
+  ).length
+}
+
+export function getMachineUsageRecordsByOperationType(
+  operationType: MachineOperationType
+): MachineUsageRecord[] {
+  return getMachineUsageRecords().filter(
+    record =>
+      record.operationType ===
+      operationType
+  )
+}
+
+========================================================================
+ARQUIVO: src/services/inventoryService.ts
+========================================================================
+
+import {
+  InventoryItem,
+  InventoryItemCategory,
+  InventoryItemStatus,
+  InventoryItemUnit,
+  InventoryMovement,
+  InventoryMovementOrigin,
+  InventoryMovementOriginModule,
+  InventoryMovementOriginType,
+  InventoryMovementType,
+} from '../types'
+import { getStorageItem, setStorageItem, generateId } from './storage'
+import { isFutureDate } from '../utils/date'
+
+const INVENTORY_ITEMS_KEY = 'agro360_inventory_items'
+const INVENTORY_ITEMS_INITIALIZED_KEY = 'agro360_inventory_items_initialized'
+
+const INVENTORY_MOVEMENTS_KEY = 'agro360_inventory_movements'
+const INVENTORY_MOVEMENTS_INITIALIZED_KEY = 'agro360_inventory_movements_initialized'
+
+const VALID_CATEGORIES: InventoryItemCategory[] = [
+  'Ração',
+  'Medicamento veterinário',
+  'Vacina',
+  'Semente',
+  'Fertilizante',
+  'Defensivo agrícola',
+  'Combustível',
+  'Lubrificante',
+  'Peça',
+  'Material',
+  'Outro',
+]
+
+const VALID_UNITS: InventoryItemUnit[] = [
+  'kg',
+  'g',
+  'L',
+  'mL',
+  'un',
+  'sc',
+  't',
+  'm',
+  'Outro',
+]
+
+const VALID_STATUSES: InventoryItemStatus[] = ['Ativo', 'Inativo']
+
+const VALID_MOVEMENT_TYPES: InventoryMovementType[] = ['Entrada', 'Saída']
+
+const VALID_ORIGIN_MODULES: InventoryMovementOriginModule[] = [
+  'health',
+  'crops',
+  'machines',
+]
+
+const VALID_ORIGIN_TYPES: InventoryMovementOriginType[] = [
+  'vaccination',
+  'treatment',
+  'crop-management',
+  'machine-maintenance',
+]
+
+const VALID_ORIGIN_PAIRS: Array<{
+  module: InventoryMovementOriginModule
+  type: InventoryMovementOriginType
+}> = [
+  { module: 'health', type: 'vaccination' },
+  { module: 'health', type: 'treatment' },
+  { module: 'crops', type: 'crop-management' },
+  { module: 'machines', type: 'machine-maintenance' },
+]
+
+const ALLOWED_CATEGORIES_BY_ORIGIN_TYPE: Record<
+  InventoryMovementOriginType,
+  InventoryItemCategory[]
+> = {
+  vaccination: ['Vacina'],
+  treatment: ['Medicamento veterinário'],
+  'crop-management': [
+    'Semente',
+    'Fertilizante',
+    'Defensivo agrícola',
+  ],
+  'machine-maintenance': [
+    'Peça',
+    'Lubrificante',
+    'Material',
+  ],
+}
+
+type InventoryItemInput = Omit<
+  InventoryItem,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+type InventoryMovementInput = Omit<
+  InventoryMovement,
+  | 'id'
+  | 'createdAt'
+  | 'balanceBefore'
+  | 'balanceAfter'
+  | 'itemCodeSnapshot'
+  | 'itemNameSnapshot'
+  | 'unitSnapshot'
+>
+
+function initializeInventoryItemsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(
+    INVENTORY_ITEMS_INITIALIZED_KEY,
+    false,
+  )
+
+  if (!initialized) {
+    setStorageItem(INVENTORY_ITEMS_KEY, [])
+    setStorageItem(INVENTORY_ITEMS_INITIALIZED_KEY, true)
+  }
+}
+
+function initializeInventoryMovementsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(
+    INVENTORY_MOVEMENTS_INITIALIZED_KEY,
+    false,
+  )
+
+  if (!initialized) {
+    setStorageItem(INVENTORY_MOVEMENTS_KEY, [])
+    setStorageItem(INVENTORY_MOVEMENTS_INITIALIZED_KEY, true)
+  }
+}
+
+function isNonEmptyString(
+  value: unknown,
+): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0
+  )
+}
+
+function isOptionalString(
+  value: unknown,
+): value is string | undefined {
+  if (value === undefined) return true
+  return typeof value === 'string'
+}
+
+function isOptionalNonNegativeNumber(
+  value: unknown,
+): value is number | undefined {
+  if (value === undefined) return true
+
+  if (typeof value !== 'number') {
+    return false
+  }
+
+  return (
+    Number.isFinite(value) &&
+    value >= 0
+  )
+}
+
+function isNonNegativeNumber(
+  value: unknown,
+): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0
+  )
+}
+
+function isPositiveNumber(
+  value: unknown,
+): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value > 0
+  )
+}
+
+function isValidCivilDate(
+  dateString: string,
+): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return false
+  }
+
+  const [year, month, day] =
+    dateString.split('-').map(Number)
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return false
+  }
+
+  if (month < 1 || month > 12) {
+    return false
+  }
+
+  const daysInMonth = (() => {
+    switch (month) {
+      case 1:
+        return 31
+      case 2: {
+        const isLeapYear =
+          year % 400 === 0 ||
+          (
+            year % 4 === 0 &&
+            year % 100 !== 0
+          )
+
+        return isLeapYear
+          ? 29
+          : 28
+      }
+      case 3:
+        return 31
+      case 4:
+        return 30
+      case 5:
+        return 31
+      case 6:
+        return 30
+      case 7:
+        return 31
+      case 8:
+        return 31
+      case 9:
+        return 30
+      case 10:
+        return 31
+      case 11:
+        return 30
+      case 12:
+        return 31
+      default:
+        return 0
+    }
+  })()
+
+  return (
+    day >= 1 &&
+    day <= daysInMonth
+  )
+}
+
+function isValidOriginPair(
+  module: string,
+  type: string,
+): boolean {
+  return VALID_ORIGIN_PAIRS.some(
+    pair =>
+      pair.module === module &&
+      pair.type === type,
+  )
+}
+
+function isInventoryMovementOrigin(
+  value: unknown,
+): value is InventoryMovementOrigin {
+  if (
+    !value ||
+    typeof value !== 'object'
+  ) {
+    return false
+  }
+
+  const obj =
+    value as Record<string, unknown>
+
+  if (
+    typeof obj.module !== 'string' ||
+    !VALID_ORIGIN_MODULES.includes(
+      obj.module as InventoryMovementOriginModule,
+    )
+  ) {
+    return false
+  }
+
+  if (
+    typeof obj.type !== 'string' ||
+    !VALID_ORIGIN_TYPES.includes(
+      obj.type as InventoryMovementOriginType,
+    )
+  ) {
+    return false
+  }
+
+  if (
+    !isValidOriginPair(
+      obj.module,
+      obj.type,
+    )
+  ) {
+    return false
+  }
+
+  return isNonEmptyString(
+    obj.recordId,
+  )
+}
+
+function isInventoryItem(
+  value: unknown,
+): value is InventoryItem {
+  if (
+    !value ||
+    typeof value !== 'object'
+  ) {
+    return false
+  }
+
+  const obj =
+    value as Record<string, unknown>
+
+  const baseValid =
+    isNonEmptyString(obj.id) &&
+    isNonEmptyString(obj.code) &&
+    isNonEmptyString(obj.name) &&
+    typeof obj.category === 'string' &&
+    VALID_CATEGORIES.includes(
+      obj.category as InventoryItemCategory,
+    ) &&
+    typeof obj.unit === 'string' &&
+    VALID_UNITS.includes(
+      obj.unit as InventoryItemUnit,
+    ) &&
+    isNonNegativeNumber(
+      obj.currentQuantity,
+    ) &&
+    isOptionalNonNegativeNumber(
+      obj.minimumQuantity,
+    ) &&
+    isOptionalString(obj.location) &&
+    isOptionalString(obj.description) &&
+    typeof obj.status === 'string' &&
+    VALID_STATUSES.includes(
+      obj.status as InventoryItemStatus,
+    ) &&
+    typeof obj.createdAt === 'string' &&
+    typeof obj.updatedAt === 'string'
+
+  if (!baseValid) {
+    return false
+  }
+
+  if (
+    obj.batchNumber !== undefined &&
+    typeof obj.batchNumber !== 'string'
+  ) {
+    return false
+  }
+
+  if (
+    obj.expirationDate !== undefined
+  ) {
+    if (
+      typeof obj.expirationDate !== 'string' ||
+      !isValidCivilDate(
+        obj.expirationDate,
+      )
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isInventoryMovement(
+  value: unknown,
+): value is InventoryMovement {
+  if (
+    !value ||
+    typeof value !== 'object'
+  ) {
+    return false
+  }
+
+  const obj =
+    value as Record<string, unknown>
+
+  const baseValid =
+    isNonEmptyString(obj.id) &&
+    isNonEmptyString(
+      obj.inventoryItemId,
+    ) &&
+    typeof obj.type === 'string' &&
+    VALID_MOVEMENT_TYPES.includes(
+      obj.type as InventoryMovementType,
+    ) &&
+    typeof obj.movementDate === 'string' &&
+    isValidCivilDate(
+      obj.movementDate,
+    ) &&
+    isPositiveNumber(obj.quantity) &&
+    isNonNegativeNumber(
+      obj.balanceBefore,
+    ) &&
+    isNonNegativeNumber(
+      obj.balanceAfter,
+    ) &&
+    isNonEmptyString(obj.reason) &&
+    isOptionalString(
+      obj.responsible,
+    ) &&
+    isOptionalString(obj.notes) &&
+    typeof obj.createdAt === 'string'
+
+  if (!baseValid) {
+    return false
+  }
+
+  if (obj.origin !== undefined) {
+    if (
+      !isInventoryMovementOrigin(
+        obj.origin,
+      )
+    ) {
+      return false
+    }
+
+    if (
+      !isNonEmptyString(
+        obj.itemCodeSnapshot,
+      )
+    ) {
+      return false
+    }
+
+    if (
+      !isNonEmptyString(
+        obj.itemNameSnapshot,
+      )
+    ) {
+      return false
+    }
+
+    if (
+      typeof obj.unitSnapshot !==
+      'string'
+    ) {
+      return false
+    }
+
+    if (
+      !VALID_UNITS.includes(
+        obj.unitSnapshot as InventoryItemUnit,
+      )
+    ) {
+      return false
+    }
+  } else {
+    if (
+      obj.itemCodeSnapshot !== undefined &&
+      typeof obj.itemCodeSnapshot !==
+        'string'
+    ) {
+      return false
+    }
+
+    if (
+      obj.itemNameSnapshot !== undefined &&
+      typeof obj.itemNameSnapshot !==
+        'string'
+    ) {
+      return false
+    }
+
+    if (
+      obj.unitSnapshot !== undefined
+    ) {
+      if (
+        typeof obj.unitSnapshot !==
+          'string' ||
+        !VALID_UNITS.includes(
+          obj.unitSnapshot as InventoryItemUnit,
+        )
+      ) {
+        return false
+      }
+    }
+  }
+
+  return true
+}
+
+function getRawInventoryItemEntries(): unknown[] {
+  initializeInventoryItemsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      INVENTORY_ITEMS_KEY,
+      [],
+    )
+
+  return Array.isArray(raw)
+    ? [...raw]
+    : []
+}
+
+function getRawInventoryMovementEntries(): unknown[] {
+  initializeInventoryMovementsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      INVENTORY_MOVEMENTS_KEY,
+      [],
+    )
+
+  return Array.isArray(raw)
+    ? [...raw]
+    : []
+}
+
+function normalizeCode(
+  code: string,
+): string {
+  return code.trim().toUpperCase()
+}
+
+function isDuplicateCode(
+  code: string,
+  excludeId?: string,
+): boolean {
+  const items =
+    getInventoryItems()
+
+  const normalized =
+    normalizeCode(code)
+
+  return items.some(
+    item =>
+      normalizeCode(item.code) ===
+        normalized &&
+      item.id !== excludeId,
+  )
+}
+
+function validateAndNormalizeInventoryItemInput(
+  data: InventoryItemInput,
+): InventoryItemInput {
+  const code =
+    normalizeCode(data.code)
+
+  if (!code) {
+    throw new Error(
+      'Código é obrigatório.',
+    )
+  }
+
+  const name =
+    data.name.trim()
+
+  if (!name) {
+    throw new Error(
+      'Nome é obrigatório.',
+    )
+  }
+
+  if (
+    !VALID_CATEGORIES.includes(
+      data.category,
+    )
+  ) {
+    throw new Error(
+      'Categoria inválida.',
+    )
+  }
+
+  if (
+    !VALID_UNITS.includes(
+      data.unit,
+    )
+  ) {
+    throw new Error(
+      'Unidade inválida.',
+    )
+  }
+
+  if (
+    !VALID_STATUSES.includes(
+      data.status,
+    )
+  ) {
+    throw new Error(
+      'Situação inválida.',
+    )
+  }
+
+  const currentQuantity =
+    data.currentQuantity
+
+  if (
+    typeof currentQuantity !== 'number' ||
+    !Number.isFinite(currentQuantity) ||
+    currentQuantity < 0
+  ) {
+    throw new Error(
+      'Quantidade atual deve ser maior ou igual a zero.',
+    )
+  }
+
+  const minimumQuantity =
+    data.minimumQuantity
+
+  if (
+    minimumQuantity !== undefined
+  ) {
+    if (
+      typeof minimumQuantity !==
+        'number' ||
+      !Number.isFinite(
+        minimumQuantity,
+      ) ||
+      minimumQuantity < 0
+    ) {
+      throw new Error(
+        'Quantidade mínima deve ser maior ou igual a zero.',
+      )
+    }
+  }
+
+  const batchNumber =
+    data.batchNumber?.trim() ||
+    undefined
+
+  const expirationDate =
+    data.expirationDate?.trim() ||
+    undefined
+
+  if (
+    expirationDate !== undefined &&
+    !isValidCivilDate(
+      expirationDate,
+    )
+  ) {
+    throw new Error(
+      'Data de validade inválida.',
+    )
+  }
+
+  return {
+    code,
+    name,
+    category: data.category,
+    unit: data.unit,
+    currentQuantity,
+    minimumQuantity,
+    location:
+      data.location?.trim() ||
+      undefined,
+    description:
+      data.description?.trim() ||
+      undefined,
+    status: data.status,
+    batchNumber,
+    expirationDate,
+  }
+}
+
+export function getInventoryItems():
+  InventoryItem[] {
+  initializeInventoryItemsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      INVENTORY_ITEMS_KEY,
+      [],
+    )
+
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .filter(isInventoryItem)
+    .sort((a, b) => {
+      const codeCompare =
+        a.code.localeCompare(
+          b.code,
+        )
+
+      if (codeCompare !== 0) {
+        return codeCompare
+      }
+
+      return a.name.localeCompare(
+        b.name,
+      )
+    })
+}
+
+export function getInventoryItemById(
+  id: string,
+): InventoryItem | undefined {
+  return getInventoryItems().find(
+    item => item.id === id,
+  )
+}
+
+export function createInventoryItem(
+  data: InventoryItemInput,
+): InventoryItem {
+  initializeInventoryItemsIfNeeded()
+
+  const normalized =
+    validateAndNormalizeInventoryItemInput(
+      data,
+    )
+
+  if (
+    isDuplicateCode(
+      normalized.code,
+    )
+  ) {
+    throw new Error(
+      'Já existe um item de estoque com este código.',
+    )
+  }
+
+  const rawEntries =
+    getRawInventoryItemEntries()
+
+  const now =
+    new Date().toISOString()
+
+  const newItem:
+    InventoryItem = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  rawEntries.push(
+    newItem,
+  )
+
+  setStorageItem(
+    INVENTORY_ITEMS_KEY,
+    rawEntries,
+  )
+
+  return newItem
+}
+
+export function updateInventoryItem(
+  id: string,
+  data: InventoryItemInput,
+): InventoryItem | undefined {
+  const currentItem =
+    getInventoryItemById(id)
+
+  if (!currentItem) {
+    return undefined
+  }
+
+  const normalized =
+    validateAndNormalizeInventoryItemInput(
+      data,
+    )
+
+  if (
+    isDuplicateCode(
+      normalized.code,
+      id,
+    )
+  ) {
+    throw new Error(
+      'Já existe um item de estoque com este código.',
+    )
+  }
+
+  if (
+    currentItem.currentQuantity !==
+    normalized.currentQuantity
+  ) {
+    throw new Error(
+      'A quantidade atual não pode ser alterada diretamente. Utilize as movimentações de estoque.',
+    )
+  }
+
+  if (
+    currentItem.unit !==
+    normalized.unit
+  ) {
+    const hasMovements =
+      getInventoryMovementsByItemId(
+        id,
+      ).length > 0
+
+    if (hasMovements) {
+      throw new Error(
+        'Não é possível alterar a unidade de um item que já possui movimentações.',
+      )
+    }
+  }
+
+  const rawEntries =
+    getRawInventoryItemEntries()
+
+  const targetIndex =
+    rawEntries.findIndex(
+      item =>
+        isInventoryItem(item) &&
+        item.id === id,
+    )
+
+  if (targetIndex === -1) {
+    return undefined
+  }
+
+  const updatedItem:
+    InventoryItem = {
+    ...normalized,
+    id: currentItem.id,
+    createdAt:
+      currentItem.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  rawEntries[targetIndex] =
+    updatedItem
+
+  setStorageItem(
+    INVENTORY_ITEMS_KEY,
+    rawEntries,
+  )
+
+  return updatedItem
+}
+
+export function deleteInventoryItem(
+  id: string,
+): boolean {
+  const hasMovements =
+    getInventoryMovementsByItemId(
+      id,
+    ).length > 0
+
+  if (hasMovements) {
+    throw new Error(
+      'Não é possível excluir este item porque ele possui movimentações de estoque.',
+    )
+  }
+
+  const rawEntries =
+    getRawInventoryItemEntries()
+
+  const targetIndex =
+    rawEntries.findIndex(
+      item =>
+        isInventoryItem(item) &&
+        item.id === id,
+    )
+
+  if (targetIndex === -1) {
+    return false
+  }
+
+  rawEntries.splice(
+    targetIndex,
+    1,
+  )
+
+  setStorageItem(
+    INVENTORY_ITEMS_KEY,
+    rawEntries,
+  )
+
+  return true
+}
+
+export function isBelowMinimum(
+  item: InventoryItem,
+): boolean {
+  if (
+    item.minimumQuantity ===
+    undefined
+  ) {
+    return false
+  }
+
+  return (
+    item.currentQuantity <
+    item.minimumQuantity
+  )
+}
+
+export function getInventoryMovements():
+  InventoryMovement[] {
+  initializeInventoryMovementsIfNeeded()
+
+  const raw =
+    getStorageItem<unknown>(
+      INVENTORY_MOVEMENTS_KEY,
+      [],
+    )
+
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw
+    .filter(isInventoryMovement)
+    .sort((a, b) => {
+      const dateCompare =
+        b.movementDate.localeCompare(
+          a.movementDate,
+        )
+
+      if (dateCompare !== 0) {
+        return dateCompare
+      }
+
+      return b.createdAt.localeCompare(
+        a.createdAt,
+      )
+    })
+}
+
+export function getInventoryMovementById(
+  id: string,
+): InventoryMovement | undefined {
+  return getInventoryMovements().find(
+    movement =>
+      movement.id === id,
+  )
+}
+
+export function getInventoryMovementsByItemId(
+  inventoryItemId: string,
+): InventoryMovement[] {
+  return getInventoryMovements().filter(
+    movement =>
+      movement.inventoryItemId ===
+      inventoryItemId,
+  )
+}
+
+export function getInventoryMovementsByOrigin(
+  module: InventoryMovementOriginModule,
+  type: InventoryMovementOriginType,
+  recordId: string,
+): InventoryMovement[] {
+  return getInventoryMovements().filter(
+    movement =>
+      movement.origin !== undefined &&
+      movement.origin.module ===
+        module &&
+      movement.origin.type ===
+        type &&
+      movement.origin.recordId ===
+        recordId,
+  )
+}
+
+export function hasInventoryMovementByOrigin(
+  module: InventoryMovementOriginModule,
+  type: InventoryMovementOriginType,
+  recordId: string,
+): boolean {
+  return (
+    getInventoryMovementsByOrigin(
+      module,
+      type,
+      recordId,
+    ).length > 0
+  )
+}
+
+function validateAndNormalizeInventoryMovementInput(
+  data: InventoryMovementInput,
+): InventoryMovementInput {
+  const inventoryItemId =
+    data.inventoryItemId.trim()
+
+  if (!inventoryItemId) {
+    throw new Error(
+      'Item é obrigatório.',
+    )
+  }
+
+  const item =
+    getInventoryItemById(
+      inventoryItemId,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Item de estoque não encontrado.',
+    )
+  }
+
+  if (
+    item.status === 'Inativo'
+  ) {
+    throw new Error(
+      'Não é possível movimentar um item inativo.',
+    )
+  }
+
+  if (
+    !VALID_MOVEMENT_TYPES.includes(
+      data.type,
+    )
+  ) {
+    throw new Error(
+      'Tipo de movimentação inválido.',
+    )
+  }
+
+  const movementDate =
+    data.movementDate.trim()
+
+  if (!movementDate) {
+    throw new Error(
+      'Informe a data da movimentação.',
+    )
+  }
+
+  if (
+    !isValidCivilDate(
+      movementDate,
+    )
+  ) {
+    throw new Error(
+      'Data da movimentação inválida.',
+    )
+  }
+
+  if (
+    isFutureDate(
+      movementDate,
+    )
+  ) {
+    throw new Error(
+      'A data da movimentação não pode ser futura.',
+    )
+  }
+
+  const quantity =
+    data.quantity
+
+  if (
+    typeof quantity !== 'number' ||
+    !Number.isFinite(quantity) ||
+    quantity <= 0
+  ) {
+    throw new Error(
+      'Quantidade deve ser maior que zero.',
+    )
+  }
+
+  const reason =
+    data.reason.trim()
+
+  if (!reason) {
+    throw new Error(
+      'Motivo é obrigatório.',
+    )
+  }
+
+  if (
+    data.type === 'Saída' &&
+    quantity >
+      item.currentQuantity
+  ) {
+    throw new Error(
+      'Saldo insuficiente para realizar esta saída.',
+    )
+  }
+
+  if (
+    data.origin !== undefined &&
+    !isInventoryMovementOrigin(
+      data.origin,
+    )
+  ) {
+    throw new Error(
+      'Origem da movimentação inválida.',
+    )
+  }
+
+  return {
+    inventoryItemId,
+    type: data.type,
+    movementDate,
+    quantity,
+    reason,
+    responsible:
+      data.responsible?.trim() ||
+      undefined,
+    notes:
+      data.notes?.trim() ||
+      undefined,
+    origin:
+      data.origin,
+  }
+}
+
+export function validateInventoryMovementInput(
+  data: InventoryMovementInput,
+): void {
+  validateAndNormalizeInventoryMovementInput(
+    data,
+  )
+}
+
+function assertOriginMovementType(
+  origin: InventoryMovementOrigin,
+  type: InventoryMovementType,
+): void {
+  if (
+    origin.module === 'health' &&
+    origin.type === 'vaccination'
+  ) {
+    if (type !== 'Saída') {
+      throw new Error(
+        'A movimentação vinculada a uma vacinação deve ser do tipo Saída.',
+      )
+    }
+
+    return
+  }
+
+  if (type !== 'Saída') {
+    throw new Error(
+      'Movimentações integradas com outros módulos devem ser do tipo Saída.',
+    )
+  }
+}
+
+function assertOriginItemCategory(
+  origin: InventoryMovementOrigin,
+  item: InventoryItem,
+): void {
+  const allowed =
+    ALLOWED_CATEGORIES_BY_ORIGIN_TYPE[
+      origin.type
+    ]
+
+  if (
+    !allowed ||
+    allowed.length === 0
+  ) {
+    return
+  }
+
+  if (
+    allowed.includes(
+      item.category,
+    )
+  ) {
+    return
+  }
+
+  if (
+    origin.type === 'vaccination'
+  ) {
+    throw new Error(
+      'A baixa de uma vacinação deve utilizar um item da categoria Vacina.',
+    )
+  }
+
+  if (
+    origin.type === 'treatment'
+  ) {
+    throw new Error(
+      'A baixa de um tratamento deve utilizar um item da categoria Medicamento veterinário.',
+    )
+  }
+
+  if (
+    origin.type ===
+    'crop-management'
+  ) {
+    throw new Error(
+      'A baixa de um manejo agrícola deve utilizar itens das categorias Semente, Fertilizante ou Defensivo agrícola.',
+    )
+  }
+
+  if (
+    origin.type ===
+    'machine-maintenance'
+  ) {
+    throw new Error(
+      'A baixa de uma manutenção deve utilizar itens das categorias Peça, Lubrificante ou Material.',
+    )
+  }
+
+  throw new Error(
+    'Categoria de item incompatível com esta integração.',
+  )
+}
+
+export function validateIntegratedMovement(
+  inventoryItemId: string,
+  quantity: number,
+  movementDate: string,
+  origin: InventoryMovementOrigin,
+  responsible?: string,
+  reason?: string,
+): void {
+  validateInventoryMovementInput({
+    inventoryItemId,
+    type: 'Saída',
+    movementDate,
+    quantity,
+    reason:
+      reason ??
+      'Baixa por consumo integrado',
+    responsible,
+    notes: undefined,
+    origin,
+  })
+
+  assertOriginMovementType(
+    origin,
+    'Saída',
+  )
+
+  const item =
+    getInventoryItemById(
+      inventoryItemId,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Item de estoque não encontrado.',
+    )
+  }
+
+  assertOriginItemCategory(
+    origin,
+    item,
+  )
+}
+
+export function validateIntegratedMovementsBatch(
+  consumptions: Array<{
+    inventoryItemId: string
+    quantity: number
+  }>,
+  movementDate: string,
+  origin: InventoryMovementOrigin,
+  responsible?: string,
+  reason?: string,
+): void {
+  if (
+    !Array.isArray(consumptions) ||
+    consumptions.length === 0
+  ) {
+    throw new Error(
+      'Informe ao menos um item para baixa.',
+    )
+  }
+
+  for (
+    const line of consumptions
+  ) {
+    validateIntegratedMovement(
+      line.inventoryItemId,
+      line.quantity,
+      movementDate,
+      origin,
+      responsible,
+      reason,
+    )
+  }
+
+  const totalByItemId =
+    new Map<string, number>()
+
+  for (
+    const line of consumptions
+  ) {
+    const current =
+      totalByItemId.get(
+        line.inventoryItemId,
+      ) ?? 0
+
+    totalByItemId.set(
+      line.inventoryItemId,
+      current +
+        line.quantity,
+    )
+  }
+
+  for (
+    const [
+      itemId,
+      total,
+    ] of totalByItemId.entries()
+  ) {
+    const item =
+      getInventoryItemById(
+        itemId,
+      )
+
+    if (!item) {
+      throw new Error(
+        'Item de estoque não encontrado.',
+      )
+    }
+
+    if (
+      total >
+      item.currentQuantity
+    ) {
+      throw new Error(
+        'Saldo insuficiente para realizar esta saída.',
+      )
+    }
+  }
+}
+
+export function validateVaccinationStockConsumption(
+  inventoryItemId: string,
+  quantity: number,
+  movementDate: string,
+  responsible?: string,
+): void {
+  validateIntegratedMovement(
+    inventoryItemId,
+    quantity,
+    movementDate,
+    {
+      module: 'health',
+      type: 'vaccination',
+      recordId: '__pre__',
+    },
+    responsible,
+    'Baixa por vacinação',
+  )
+}
+
+interface MovementLine {
+  item: InventoryItem
+  rawInput: InventoryMovementInput
+  normalized: InventoryMovementInput
+}
+
+function buildMovementLine(
+  data: InventoryMovementInput,
+  origin?: InventoryMovementOrigin,
+): MovementLine {
+  const normalized =
+    validateAndNormalizeInventoryMovementInput({
+      ...data,
+      origin:
+        origin ??
+        data.origin,
+    })
+
+  const item =
+    getInventoryItemById(
+      normalized.inventoryItemId,
+    )
+
+  if (!item) {
+    throw new Error(
+      'Item de estoque não encontrado.',
+    )
+  }
+
+  if (
+    normalized.origin !==
+    undefined
+  ) {
+    assertOriginMovementType(
+      normalized.origin,
+      normalized.type,
+    )
+
+    assertOriginItemCategory(
+      normalized.origin,
+      item,
+    )
+  }
+
+  return {
+    item,
+    rawInput: data,
+    normalized,
+  }
+}
+
+function throwIdempotencyError(
+  origin: InventoryMovementOrigin,
+): never {
+  if (
+    origin.module === 'health' &&
+    origin.type === 'vaccination'
+  ) {
+    throw new Error(
+      'Esta vacinação já possui baixa de estoque registrada.',
+    )
+  }
+
+  throw new Error(
+    'Este registro já possui baixa de estoque vinculada.',
+  )
+}
+
+export function createInventoryMovement(
+  data: InventoryMovementInput,
+): InventoryMovement {
+  initializeInventoryItemsIfNeeded()
+  initializeInventoryMovementsIfNeeded()
+
+  const line =
+    buildMovementLine(data)
+
+  if (
+    line.normalized.origin !==
+    undefined
+  ) {
+    if (
+      hasInventoryMovementByOrigin(
+        line.normalized.origin.module,
+        line.normalized.origin.type,
+        line.normalized.origin.recordId,
+      )
+    ) {
+      throwIdempotencyError(
+        line.normalized.origin,
+      )
+    }
+  }
+
+  const balanceBefore =
+    line.item.currentQuantity
+
+  const balanceAfter =
+    line.normalized.type ===
+    'Entrada'
+      ? balanceBefore +
+        line.normalized.quantity
+      : balanceBefore -
+        line.normalized.quantity
+
+  if (
+    !Number.isFinite(
+      balanceAfter,
+    )
+  ) {
+    throw new Error(
+      'O saldo resultante é inválido.',
+    )
+  }
+
+  if (
+    balanceAfter < 0
+  ) {
+    throw new Error(
+      'Saldo insuficiente para realizar esta saída.',
+    )
+  }
+
+  const now =
+    new Date().toISOString()
+
+  const newMovement:
+    InventoryMovement = {
+    ...line.normalized,
+    id: generateId(),
+    balanceBefore,
+    balanceAfter,
+    createdAt: now,
+    ...(line.normalized.origin !==
+    undefined
+      ? {
+          itemCodeSnapshot:
+            line.item.code,
+          itemNameSnapshot:
+            line.item.name,
+          unitSnapshot:
+            line.item.unit,
+        }
+      : {}),
+  }
+
+  const rawItemsBefore =
+    getRawInventoryItemEntries()
+
+  const itemIndex =
+    rawItemsBefore.findIndex(
+      entry =>
+        isInventoryItem(entry) &&
+        entry.id ===
+          line.item.id,
+    )
+
+  if (
+    itemIndex === -1
+  ) {
+    throw new Error(
+      'Item de estoque não encontrado.',
+    )
+  }
+
+  const updatedItem:
+    InventoryItem = {
+    ...line.item,
+    currentQuantity:
+      balanceAfter,
+    updatedAt: now,
+  }
+
+  const nextRawItems = [
+    ...rawItemsBefore,
+  ]
+
+  nextRawItems[
+    itemIndex
+  ] = updatedItem
+
+  const rawMovementsBefore =
+    getRawInventoryMovementEntries()
+
+  const nextRawMovements = [
+    ...rawMovementsBefore,
+    newMovement,
+  ]
+
+  setStorageItem(
+    INVENTORY_ITEMS_KEY,
+    nextRawItems,
+  )
+
+  try {
+    setStorageItem(
+      INVENTORY_MOVEMENTS_KEY,
+      nextRawMovements,
+    )
+  } catch (error) {
+    try {
+      setStorageItem(
+        INVENTORY_ITEMS_KEY,
+        rawItemsBefore,
+      )
+    } catch {
+      // mantém propagação do erro original
+    }
+
+    throw error
+  }
+
+  return newMovement
+}
+
+export function createInventoryMovementsBatch(
+  inputs: InventoryMovementInput[],
+): InventoryMovement[] {
+  initializeInventoryItemsIfNeeded()
+  initializeInventoryMovementsIfNeeded()
+
+  if (
+    inputs.length === 0
+  ) {
+    throw new Error(
+      'Nenhuma movimentação informada.',
+    )
+  }
+
+  const firstOrigin =
+    inputs[0].origin
+
+  if (!firstOrigin) {
+    throw new Error(
+      'Movimentações em lote exigem uma origem compartilhada.',
+    )
+  }
+
+  for (
+    const input of inputs
+  ) {
+    if (!input.origin) {
+      throw new Error(
+        'Movimentações em lote exigem uma origem compartilhada.',
+      )
+    }
+
+    if (
+      input.origin.module !==
+        firstOrigin.module ||
+      input.origin.type !==
+        firstOrigin.type ||
+      input.origin.recordId !==
+        firstOrigin.recordId
+    ) {
+      throw new Error(
+        'Todas as movimentações em lote devem compartilhar a mesma origem.',
+      )
+    }
+  }
+
+  if (
+    hasInventoryMovementByOrigin(
+      firstOrigin.module,
+      firstOrigin.type,
+      firstOrigin.recordId,
+    )
+  ) {
+    throwIdempotencyError(
+      firstOrigin,
+    )
+  }
+
+  const lines:
+    MovementLine[] =
+    inputs.map(input =>
+      buildMovementLine(
+        input,
+        firstOrigin,
+      ),
+    )
+
+  const consumptionByItemId =
+    new Map<string, number>()
+
+  for (
+    const line of lines
+  ) {
+    if (
+      line.normalized.type !==
+      'Saída'
+    ) {
+      throw new Error(
+        'Movimentações integradas em lote devem ser do tipo Saída.',
+      )
+    }
+
+    const id =
+      line.normalized.inventoryItemId
+
+    const current =
+      consumptionByItemId.get(
+        id,
+      ) ?? 0
+
+    consumptionByItemId.set(
+      id,
+      current +
+        line.normalized.quantity,
+    )
+  }
+
+  for (
+    const [
+      itemId,
+      totalQuantity,
+    ] of consumptionByItemId.entries()
+  ) {
+    const item =
+      getInventoryItemById(
+        itemId,
+      )
+
+    if (!item) {
+      throw new Error(
+        'Item de estoque não encontrado.',
+      )
+    }
+
+    if (
+      totalQuantity >
+      item.currentQuantity
+    ) {
+      throw new Error(
+        'Saldo insuficiente para realizar esta saída.',
+      )
+    }
+  }
+
+  const now =
+    new Date().toISOString()
+
+  const rawItemsBefore =
+    getRawInventoryItemEntries()
+
+  const rawMovementsBefore =
+    getRawInventoryMovementEntries()
+
+  const nextRawItems = [
+    ...rawItemsBefore,
+  ]
+
+  const runningBalances =
+    new Map<string, number>()
+
+  const newMovements:
+    InventoryMovement[] = []
+
+  for (
+    const line of lines
+  ) {
+    const itemId =
+      line.normalized.inventoryItemId
+
+    const itemIndex =
+      nextRawItems.findIndex(
+        entry =>
+          isInventoryItem(entry) &&
+          entry.id === itemId,
+      )
+
+    if (
+      itemIndex === -1
+    ) {
+      throw new Error(
+        'Item de estoque não encontrado.',
+      )
+    }
+
+    const item =
+      nextRawItems[
+        itemIndex
+      ] as InventoryItem
+
+    const balanceBefore =
+      runningBalances.get(
+        itemId,
+      ) ??
+      item.currentQuantity
+
+    const balanceAfter =
+      balanceBefore -
+      line.normalized.quantity
+
+    if (
+      !Number.isFinite(
+        balanceAfter,
+      )
+    ) {
+      throw new Error(
+        'O saldo resultante é inválido.',
+      )
+    }
+
+    if (
+      balanceAfter < 0
+    ) {
+      throw new Error(
+        'Saldo insuficiente para realizar esta saída.',
+      )
+    }
+
+    runningBalances.set(
+      itemId,
+      balanceAfter,
+    )
+
+    const newMovement:
+      InventoryMovement = {
+      ...line.normalized,
+      id: generateId(),
+      balanceBefore,
+      balanceAfter,
+      createdAt: now,
+      itemCodeSnapshot:
+        item.code,
+      itemNameSnapshot:
+        item.name,
+      unitSnapshot:
+        item.unit,
+    }
+
+    newMovements.push(
+      newMovement,
+    )
+
+    const updatedItem:
+      InventoryItem = {
+      ...item,
+      currentQuantity:
+        balanceAfter,
+      updatedAt: now,
+    }
+
+    nextRawItems[
+      itemIndex
+    ] = updatedItem
+  }
+
+  const nextRawMovements = [
+    ...rawMovementsBefore,
+    ...newMovements,
+  ]
+
+  setStorageItem(
+    INVENTORY_ITEMS_KEY,
+    nextRawItems,
+  )
+
+  try {
+    setStorageItem(
+      INVENTORY_MOVEMENTS_KEY,
+      nextRawMovements,
+    )
+  } catch (error) {
+    try {
+      setStorageItem(
+        INVENTORY_ITEMS_KEY,
+        rawItemsBefore,
+      )
+    } catch {
+      // mantém propagação do erro original
+    }
+
+    throw error
+  }
+
+  return newMovements
+}
+
+========================================================================
+ARQUIVO: src/services/financeService.ts
+========================================================================
+
+import {
+  FinancialCategory,
+  FinancialTransaction,
+  FinancialTransactionType,
+} from '../types'
+import { getStorageItem, setStorageItem, generateId } from './storage'
+import { isFutureDate } from '../utils/date'
+
+const CATEGORIES_KEY = 'agro360_financial_categories'
+const CATEGORIES_INITIALIZED_KEY = 'agro360_financial_categories_initialized'
+
+const TRANSACTIONS_KEY = 'agro360_financial_transactions'
+const TRANSACTIONS_INITIALIZED_KEY =
+  'agro360_financial_transactions_initialized'
+
+const VALID_TYPES: FinancialTransactionType[] = ['Receita', 'Despesa']
+
+type FinancialCategoryInput = Omit<
+  FinancialCategory,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+type FinancialTransactionInput = Omit<
+  FinancialTransaction,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+// -------------------- Inicialização --------------------
+
+function initializeCategoriesIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(
+    CATEGORIES_INITIALIZED_KEY,
+    false,
+  )
+
+  if (!initialized) {
+    setStorageItem(CATEGORIES_KEY, [])
+    setStorageItem(CATEGORIES_INITIALIZED_KEY, true)
+  }
+}
+
+function initializeTransactionsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(
+    TRANSACTIONS_INITIALIZED_KEY,
+    false,
+  )
+
+  if (!initialized) {
+    setStorageItem(TRANSACTIONS_KEY, [])
+    setStorageItem(TRANSACTIONS_INITIALIZED_KEY, true)
+  }
+}
+
+// -------------------- Helpers --------------------
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  if (value === undefined) return true
+  return typeof value === 'string'
+}
+
+function isValidCivilDate(dateString: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false
+
+  const [year, month, day] = dateString.split('-').map(Number)
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return false
+  }
+
+  if (month < 1 || month > 12) return false
+
+  const daysInMonth = (() => {
+    switch (month) {
+      case 1: return 31
+      case 2: {
+        const isLeapYear =
+          year % 400 === 0 ||
+          (year % 4 === 0 && year % 100 !== 0)
+        return isLeapYear ? 29 : 28
+      }
+      case 3: return 31
+      case 4: return 30
+      case 5: return 31
+      case 6: return 30
+      case 7: return 31
+      case 8: return 31
+      case 9: return 30
+      case 10: return 31
+      case 11: return 30
+      case 12: return 31
+      default: return 0
+    }
+  })()
+
+  return day >= 1 && day <= daysInMonth
+}
+
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase()
+}
+
+// -------------------- Type guards --------------------
+
+function isFinancialCategory(value: unknown): value is FinancialCategory {
+  if (!value || typeof value !== 'object') return false
+
+  const obj = value as Record<string, unknown>
+
+  return (
+    isNonEmptyString(obj.id) &&
+    isNonEmptyString(obj.name) &&
+    typeof obj.type === 'string' &&
+    VALID_TYPES.includes(obj.type as FinancialTransactionType) &&
+    isOptionalString(obj.description) &&
+    typeof obj.createdAt === 'string' &&
+    typeof obj.updatedAt === 'string'
+  )
+}
+
+function isFinancialTransaction(
+  value: unknown,
+): value is FinancialTransaction {
+  if (!value || typeof value !== 'object') return false
+
+  const obj = value as Record<string, unknown>
+
+  if (
+    !isNonEmptyString(obj.id) ||
+    typeof obj.type !== 'string' ||
+    !VALID_TYPES.includes(obj.type as FinancialTransactionType) ||
+    typeof obj.date !== 'string' ||
+    !isValidCivilDate(obj.date) ||
+    !isNonEmptyString(obj.categoryId) ||
+    !isNonEmptyString(obj.description) ||
+    typeof obj.amount !== 'number' ||
+    !Number.isFinite(obj.amount) ||
+    obj.amount <= 0 ||
+    !isOptionalString(obj.notes) ||
+    typeof obj.createdAt !== 'string' ||
+    typeof obj.updatedAt !== 'string'
+  ) {
+    return false
+  }
+
+  // Movimentações com data futura são inválidas mesmo se persistidas.
+  if (isFutureDate(obj.date)) {
+    return false
+  }
+
+  return true
+}
+
+// -------------------- Leitura RAW --------------------
+
+function getRawCategoryEntries(): unknown[] {
+  initializeCategoriesIfNeeded()
+
+  const raw = getStorageItem<unknown>(CATEGORIES_KEY, [])
+
+  return Array.isArray(raw) ? [...raw] : []
+}
+
+function getRawTransactionEntries(): unknown[] {
+  initializeTransactionsIfNeeded()
+
+  const raw = getStorageItem<unknown>(TRANSACTIONS_KEY, [])
+
+  return Array.isArray(raw) ? [...raw] : []
+}
+
+// -------------------- Categorias: leitura --------------------
+
+export function getFinancialCategories(): FinancialCategory[] {
+  initializeCategoriesIfNeeded()
+
+  const raw = getStorageItem<unknown>(CATEGORIES_KEY, [])
+
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .filter(isFinancialCategory)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+}
+
+export function getFinancialCategoryById(
+  id: string,
+): FinancialCategory | undefined {
+  return getFinancialCategories().find(category => category.id === id)
+}
+
+export function getFinancialCategoriesByType(
+  type: FinancialTransactionType,
+): FinancialCategory[] {
+  return getFinancialCategories().filter(category => category.type === type)
+}
+
+// -------------------- Categorias: validação --------------------
+
+function isDuplicateCategoryName(
+  name: string,
+  type: FinancialTransactionType,
+  excludeId?: string,
+): boolean {
+  const normalized = normalizeName(name)
+
+  return getFinancialCategories().some(category => {
+    if (category.type !== type) return false
+    if (excludeId !== undefined && category.id === excludeId) return false
+    return normalizeName(category.name) === normalized
+  })
+}
+
+function validateAndNormalizeCategoryInput(
+  data: FinancialCategoryInput,
+): FinancialCategoryInput {
+  const name = data.name.trim()
+
+  if (!name) {
+    throw new Error('Nome é obrigatório.')
+  }
+
+  if (!VALID_TYPES.includes(data.type)) {
+    throw new Error('Tipo é obrigatório.')
+  }
+
+  return {
+    name,
+    type: data.type,
+    description: data.description?.trim() || undefined,
+  }
+}
+
+// -------------------- Categorias: escrita --------------------
+
+export function createFinancialCategory(
+  data: FinancialCategoryInput,
+): FinancialCategory {
+  initializeCategoriesIfNeeded()
+
+  const normalized = validateAndNormalizeCategoryInput(data)
+
+  if (isDuplicateCategoryName(normalized.name, normalized.type)) {
+    throw new Error(
+      'Já existe uma categoria com este nome para este tipo.',
+    )
+  }
+
+  const rawEntries = getRawCategoryEntries()
+  const now = new Date().toISOString()
+
+  const newCategory: FinancialCategory = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  rawEntries.push(newCategory)
+  setStorageItem(CATEGORIES_KEY, rawEntries)
+
+  return newCategory
+}
+
+export function updateFinancialCategory(
+  id: string,
+  data: FinancialCategoryInput,
+): FinancialCategory | undefined {
+  const currentCategory = getFinancialCategoryById(id)
+
+  if (!currentCategory) return undefined
+
+  const normalized = validateAndNormalizeCategoryInput(data)
+
+  // Proteção de tipo tem prioridade sobre validação de duplicidade.
+  if (
+    currentCategory.type !== normalized.type &&
+    financialCategoryHasTransactions(id)
+  ) {
+    throw new Error(
+      'Não é possível alterar o tipo de uma categoria que já possui movimentações financeiras vinculadas.',
+    )
+  }
+
+  if (
+    isDuplicateCategoryName(normalized.name, normalized.type, id)
+  ) {
+    throw new Error(
+      'Já existe uma categoria com este nome para este tipo.',
+    )
+  }
+
+  const rawEntries = getRawCategoryEntries()
+
+  const targetIndex = rawEntries.findIndex(
+    entry => isFinancialCategory(entry) && entry.id === id,
+  )
+
+  if (targetIndex === -1) return undefined
+
+  const updatedCategory: FinancialCategory = {
+    ...normalized,
+    id: currentCategory.id,
+    createdAt: currentCategory.createdAt,
+    updatedAt: new Date().toISOString(),
+  }
+
+  rawEntries[targetIndex] = updatedCategory
+  setStorageItem(CATEGORIES_KEY, rawEntries)
+
+  return updatedCategory
+}
+
+export function deleteFinancialCategory(id: string): boolean {
+  if (financialCategoryHasTransactions(id)) {
+    throw new Error(
+      'Não é possível excluir esta categoria porque ela possui movimentações financeiras vinculadas.',
+    )
+  }
+
+  const rawEntries = getRawCategoryEntries()
+
+  const targetIndex = rawEntries.findIndex(
+    entry => isFinancialCategory(entry) && entry.id === id,
+  )
+
+  if (targetIndex === -1) return false
+
+  rawEntries.splice(targetIndex, 1)
+  setStorageItem(CATEGORIES_KEY, rawEntries)
+
+  return true
+}
+
+export function financialCategoryHasTransactions(id: string): boolean {
+  return getFinancialTransactions().some(
+    transaction => transaction.categoryId === id,
+  )
+}
+
+export function getFinancialCategoryTransactionCount(id: string): number {
+  return getFinancialTransactions().filter(
+    transaction => transaction.categoryId === id,
+  ).length
+}
+
+// -------------------- Movimentações: leitura --------------------
+
+export function getFinancialTransactions(): FinancialTransaction[] {
+  initializeTransactionsIfNeeded()
+
+  const raw = getStorageItem<unknown>(TRANSACTIONS_KEY, [])
+
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .filter(isFinancialTransaction)
+    .filter(transaction => {
+      const category = getFinancialCategoryById(transaction.categoryId)
+
+      if (!category) return false
+      if (category.type !== transaction.type) return false
+
+      return true
+    })
+    .sort((a, b) => {
+      const dateCompare = b.date.localeCompare(a.date)
+      if (dateCompare !== 0) return dateCompare
+      return b.createdAt.localeCompare(a.createdAt)
+    })
+}
+
+export function getFinancialTransactionById(
+  id: string,
+): FinancialTransaction | undefined {
+  return getFinancialTransactions().find(
+    transaction => transaction.id === id,
+  )
+}
+
+export function getFinancialTransactionsByType(
+  type: FinancialTransactionType,
+): FinancialTransaction[] {
+  return getFinancialTransactions().filter(
+    transaction => transaction.type === type,
+  )
+}
+
+export function getFinancialTransactionsByCategoryId(
+  categoryId: string,
+): FinancialTransaction[] {
+  return getFinancialTransactions().filter(
+    transaction => transaction.categoryId === categoryId,
+  )
+}
+
+export function getFinancialTransactionsInPeriod(
+  startDate?: string,
+  endDate?: string,
+): FinancialTransaction[] {
+  return getFinancialTransactions().filter(transaction => {
+    if (startDate && transaction.date < startDate) return false
+    if (endDate && transaction.date > endDate) return false
+    return true
+  })
+}
+
+// -------------------- Movimentações: validação --------------------
+
+function validateAndNormalizeTransactionInput(
+  data: FinancialTransactionInput,
+): FinancialTransactionInput {
+  if (!VALID_TYPES.includes(data.type)) {
+    throw new Error('Tipo é obrigatório.')
+  }
+
+  const date = data.date.trim()
+
+  if (!date) {
+    throw new Error('Data é obrigatória.')
+  }
+
+  if (!isValidCivilDate(date)) {
+    throw new Error('Data inválida.')
+  }
+
+  if (isFutureDate(date)) {
+    throw new Error(
+      'A data da movimentação financeira não pode ser futura.',
+    )
+  }
+
+  const categoryId = data.categoryId.trim()
+
+  if (!categoryId) {
+    throw new Error('Categoria é obrigatória.')
+  }
+
+  const category = getFinancialCategoryById(categoryId)
+
+  if (!category) {
+    throw new Error('Categoria financeira não encontrada.')
+  }
+
+  if (category.type !== data.type) {
+    throw new Error(
+      'A categoria selecionada não é compatível com o tipo da movimentação.',
+    )
+  }
+
+  const description = data.description.trim()
+
+  if (!description) {
+    throw new Error('Descrição é obrigatória.')
+  }
+
+  const amount = data.amount
+
+  if (
+    typeof amount !== 'number' ||
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    throw new Error('O valor deve ser maior que zero.')
+  }
+
+  return {
+    type: data.type,
+    date,
+    categoryId,
+    description,
+    amount,
+    notes: data.notes?.trim() || undefined,
+  }
+}
+
+// -------------------- Movimentações: escrita --------------------
+
+export function createFinancialTransaction(
+  data: FinancialTransactionInput,
+): FinancialTransaction {
+  initializeTransactionsIfNeeded()
+
+  const normalized = validateAndNormalizeTransactionInput(data)
+
+  const rawEntries = getRawTransactionEntries()
+  const now = new Date().toISOString()
+
+  const newTransaction: FinancialTransaction = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  rawEntries.push(newTransaction)
+  setStorageItem(TRANSACTIONS_KEY, rawEntries)
+
+  return newTransaction
+}
+
+export function updateFinancialTransaction(
+  id: string,
+  data: FinancialTransactionInput,
+): FinancialTransaction | undefined {
+  const currentTransaction = getFinancialTransactionById(id)
+
+  if (!currentTransaction) return undefined
+
+  if (data.type !== currentTransaction.type) {
+    throw new Error(
+      'Não é possível alterar o tipo de uma movimentação financeira.',
+    )
+  }
+
+  const normalized = validateAndNormalizeTransactionInput(data)
+
+  const rawEntries = getRawTransactionEntries()
+
+  const targetIndex = rawEntries.findIndex(
+    entry => isFinancialTransaction(entry) && entry.id === id,
+  )
+
+  if (targetIndex === -1) return undefined
+
+  const updatedTransaction: FinancialTransaction = {
+    ...normalized,
+    id: currentTransaction.id,
+    createdAt: currentTransaction.createdAt,
+    updatedAt: new Date().toISOString(),
+  }
+
+  rawEntries[targetIndex] = updatedTransaction
+  setStorageItem(TRANSACTIONS_KEY, rawEntries)
+
+  return updatedTransaction
+}
+
+export function deleteFinancialTransaction(id: string): boolean {
+  const rawEntries = getRawTransactionEntries()
+
+  const targetIndex = rawEntries.findIndex(
+    entry => isFinancialTransaction(entry) && entry.id === id,
+  )
+
+  if (targetIndex === -1) return false
+
+  rawEntries.splice(targetIndex, 1)
+  setStorageItem(TRANSACTIONS_KEY, rawEntries)
+
+  return true
+}
+
+========================================================================
+ARQUIVO: src/services/agendaService.ts
+========================================================================
+
+import {
+  AgendaActivity,
+  AgendaActivityPriority,
+  AgendaActivityStatus,
+  AgendaActivityType,
+  AgendaDisplayStatus,
+  AgendaEntry,
+  User,
+} from '../types'
+import { getStorageItem, setStorageItem, generateId } from './storage'
+import {
+  getExpirationStatus,
+  todayDateString,
+} from '../utils/date'
+import { getEmployeeById, getEmployees } from './employeeService'
+import {
+  userHasPermission,
+} from './permissionService'
+import {
+  getVaccinations,
+  getVaccinationStatus,
+  getTreatments,
+} from './healthService'
+import { getCropCycles } from './cropService'
+import { getInventoryItems } from './inventoryService'
+
+const ACTIVITIES_KEY = 'agro360_agenda_activities'
+const INITIALIZED_KEY = 'agro360_agenda_activities_initialized'
+
+const VALID_TYPES: AgendaActivityType[] = [
+  'Tarefa',
+  'Vacinação',
+  'Tratamento',
+  'Plantio',
+  'Colheita',
+  'Manutenção',
+  'Irrigação',
+  'Pagamento',
+  'Reposição de estoque',
+  'Outro',
+]
+
+const VALID_PRIORITIES: AgendaActivityPriority[] = ['Baixa', 'Média', 'Alta']
+const VALID_STATUSES: AgendaActivityStatus[] = [
+  'Pendente',
+  'Concluída',
+  'Cancelada',
+]
+
+type AgendaActivityInput = Omit<
+  AgendaActivity,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+// -------------------- Helpers --------------------
+
+function initializeAgendaIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(INITIALIZED_KEY, false)
+
+  if (!initialized) {
+    setStorageItem(ACTIVITIES_KEY, [])
+    setStorageItem(INITIALIZED_KEY, true)
+  }
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+  if (value === undefined) return true
+  return typeof value === 'string'
+}
+
+function isValidCivilDate(dateString: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false
+
+  const [year, month, day] = dateString.split('-').map(Number)
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return false
+  }
+
+  if (month < 1 || month > 12) return false
+
+  const daysInMonth = (() => {
+    switch (month) {
+      case 1: return 31
+      case 2: {
+        const isLeapYear =
+          year % 400 === 0 || (year % 4 === 0 && year % 100 !== 0)
+        return isLeapYear ? 29 : 28
+      }
+      case 3: return 31
+      case 4: return 30
+      case 5: return 31
+      case 6: return 30
+      case 7: return 31
+      case 8: return 31
+      case 9: return 30
+      case 10: return 31
+      case 11: return 30
+      case 12: return 31
+      default: return 0
+    }
+  })()
+
+  return day >= 1 && day <= daysInMonth
+}
+
+function isValidTime(time: string): boolean {
+  if (!/^\d{2}:\d{2}$/.test(time)) return false
+
+  const [hours, minutes] = time.split(':').map(Number)
+
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes)
+  ) {
+    return false
+  }
+
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59
+}
+
+// -------------------- Type guard --------------------
+
+function isAgendaActivity(value: unknown): value is AgendaActivity {
+  if (!value || typeof value !== 'object') return false
+
+  const obj = value as Record<string, unknown>
+
+  if (
+    !isNonEmptyString(obj.id) ||
+    !isNonEmptyString(obj.title) ||
+    typeof obj.type !== 'string' ||
+    !VALID_TYPES.includes(obj.type as AgendaActivityType) ||
+    typeof obj.date !== 'string' ||
+    !isValidCivilDate(obj.date) ||
+    typeof obj.priority !== 'string' ||
+    !VALID_PRIORITIES.includes(obj.priority as AgendaActivityPriority) ||
+    typeof obj.status !== 'string' ||
+    !VALID_STATUSES.includes(obj.status as AgendaActivityStatus) ||
+    !isOptionalString(obj.responsibleEmployeeId) ||
+    !isOptionalString(obj.notes) ||
+    typeof obj.createdAt !== 'string' ||
+    typeof obj.updatedAt !== 'string'
+  ) {
+    return false
+  }
+
+  if (obj.time !== undefined) {
+    if (typeof obj.time !== 'string' || !isValidTime(obj.time)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+// -------------------- Leitura RAW --------------------
+
+function getRawActivityEntries(): unknown[] {
+  initializeAgendaIfNeeded()
+
+  const raw = getStorageItem<unknown>(ACTIVITIES_KEY, [])
+
+  return Array.isArray(raw) ? [...raw] : []
+}
+
+// -------------------- Validação --------------------
+
+function validateAndNormalizeInput(
+  data: AgendaActivityInput,
+): AgendaActivityInput {
+  const title = data.title.trim()
+
+  if (!title) {
+    throw new Error('Título é obrigatório.')
+  }
+
+  if (!data.date || !data.date.trim()) {
+    throw new Error('Data é obrigatória.')
+  }
+
+  const date = data.date.trim()
+
+  if (!isValidCivilDate(date)) {
+    throw new Error('Data da atividade inválida.')
+  }
+
+  const time = data.time?.trim() || undefined
+
+  if (time !== undefined && !isValidTime(time)) {
+    throw new Error('Horário da atividade inválido.')
+  }
+
+  if (!VALID_TYPES.includes(data.type)) {
+    throw new Error('Tipo de atividade inválido.')
+  }
+
+  if (!VALID_PRIORITIES.includes(data.priority)) {
+    throw new Error('Prioridade inválida.')
+  }
+
+  if (!VALID_STATUSES.includes(data.status)) {
+    throw new Error('Situação da atividade inválida.')
+  }
+
+  const responsibleEmployeeId =
+    data.responsibleEmployeeId?.trim() || undefined
+
+  if (responsibleEmployeeId !== undefined) {
+    const employee = getEmployeeById(responsibleEmployeeId)
+
+    if (!employee) {
+      throw new Error('Funcionário responsável não encontrado.')
+    }
+  }
+
+  return {
+    title,
+    type: data.type,
+    date,
+    time,
+    priority: data.priority,
+    status: data.status,
+    responsibleEmployeeId,
+    notes: data.notes?.trim() || undefined,
+  }
+}
+
+// -------------------- API manual --------------------
+
+export function getAgendaActivities(): AgendaActivity[] {
+  initializeAgendaIfNeeded()
+
+  const raw = getStorageItem<unknown>(ACTIVITIES_KEY, [])
+
+  if (!Array.isArray(raw)) return []
+
+  return raw
+    .filter(isAgendaActivity)
+    .sort((a, b) => {
+      const dateCompare = a.date.localeCompare(b.date)
+      if (dateCompare !== 0) return dateCompare
+
+      const aTime = a.time ?? ''
+      const bTime = b.time ?? ''
+      const timeCompare = aTime.localeCompare(bTime)
+      if (timeCompare !== 0) return timeCompare
+
+      return a.title.localeCompare(b.title, 'pt-BR')
+    })
+}
+
+export function getAgendaActivityById(
+  id: string,
+): AgendaActivity | undefined {
+  return getAgendaActivities().find(activity => activity.id === id)
+}
+
+export function createAgendaActivity(
+  data: AgendaActivityInput,
+): AgendaActivity {
+  initializeAgendaIfNeeded()
+
+  const normalized = validateAndNormalizeInput(data)
+  const now = new Date().toISOString()
+
+  const newActivity: AgendaActivity = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  const raw = getRawActivityEntries()
+  raw.push(newActivity)
+  setStorageItem(ACTIVITIES_KEY, raw)
+
+  return newActivity
+}
+
+export function updateAgendaActivity(
+  id: string,
+  data: AgendaActivityInput,
+): AgendaActivity | undefined {
+  const current = getAgendaActivityById(id)
+
+  if (!current) return undefined
+
+  const normalized = validateAndNormalizeInput(data)
+
+  const raw = getRawActivityEntries()
+
+  const index = raw.findIndex(
+    entry => isAgendaActivity(entry) && entry.id === id,
+  )
+
+  if (index === -1) return undefined
+
+  const updated: AgendaActivity = {
+    ...normalized,
+    id: current.id,
+    createdAt: current.createdAt,
+    updatedAt: new Date().toISOString(),
+  }
+
+  raw[index] = updated
+  setStorageItem(ACTIVITIES_KEY, raw)
+
+  return updated
+}
+
+export function deleteAgendaActivity(id: string): boolean {
+  const raw = getRawActivityEntries()
+
+  const index = raw.findIndex(
+    entry => isAgendaActivity(entry) && entry.id === id,
+  )
+
+  if (index === -1) return false
+
+  raw.splice(index, 1)
+  setStorageItem(ACTIVITIES_KEY, raw)
+
+  return true
+}
+
+// -------------------- Status de exibição --------------------
+
+export function getAgendaActivityDisplayStatus(
+  activity: AgendaActivity,
+): AgendaDisplayStatus {
+  if (activity.status !== 'Pendente') {
+    return activity.status
+  }
+
+  const today = todayDateString()
+
+  if (activity.date < today) {
+    return 'Atrasada'
+  }
+
+  return 'Pendente'
+}
+
+function getDerivedDisplayStatus(date: string): AgendaDisplayStatus {
+  return date < todayDateString() ? 'Atrasada' : 'Pendente'
+}
+
+// -------------------- Merge de entradas para o usuário --------------------
+
+function buildActivityEntry(activity: AgendaActivity): AgendaEntry {
+  const employee = activity.responsibleEmployeeId
+    ? getEmployeeById(activity.responsibleEmployeeId)
+    : undefined
+
+  return {
+    id: `manual:${activity.id}`,
+    title: activity.title,
+    type: activity.type,
+    date: activity.date,
+    time: activity.time,
+    priority: activity.priority,
+    status: getAgendaActivityDisplayStatus(activity),
+    source: 'manual',
+    sourceLabel: 'Manual',
+    sourceRecordId: activity.id,
+    sourcePath: `/agenda/${activity.id}`,
+    responsibleEmployeeId: activity.responsibleEmployeeId,
+    responsibleName: employee?.name,
+    notes: activity.notes,
+    editable: true,
+  }
+}
+
+function buildHealthEntries(entries: AgendaEntry[]): void {
+  const vaccinations = getVaccinations()
+
+  for (const vaccination of vaccinations) {
+    if (!vaccination.nextDoseDate) continue
+
+    const status = getVaccinationStatus(vaccination)
+
+    let priority: AgendaActivityPriority = 'Baixa'
+    if (status === 'Vencida') priority = 'Alta'
+    else if (status === 'Próxima') priority = 'Média'
+
+    entries.push({
+      id: `health:vaccination:${vaccination.id}`,
+      title: `Próxima dose: ${vaccination.vaccineName}`,
+      type: 'Vacinação',
+      date: vaccination.nextDoseDate,
+      priority,
+      status: getDerivedDisplayStatus(vaccination.nextDoseDate),
+      source: 'health',
+      sourceLabel: 'Saúde Animal',
+      sourceRecordId: vaccination.id,
+      sourcePath: '/saude-animal/vacinacoes',
+      editable: false,
+    })
+  }
+
+  const treatments = getTreatments()
+
+  for (const treatment of treatments) {
+    if (treatment.status !== 'Em andamento') continue
+    if (!treatment.endDate) continue
+
+    const today = todayDateString()
+    const priority: AgendaActivityPriority =
+      treatment.endDate < today ? 'Alta' : 'Média'
+
+    entries.push({
+      id: `health:treatment:${treatment.id}`,
+      title: `Término de tratamento: ${treatment.reason}`,
+      type: 'Tratamento',
+      date: treatment.endDate,
+      priority,
+      status: getDerivedDisplayStatus(treatment.endDate),
+      source: 'health',
+      sourceLabel: 'Saúde Animal',
+      sourceRecordId: treatment.id,
+      sourcePath: '/saude-animal/tratamentos',
+      editable: false,
+    })
+  }
+}
+
+function buildCropsEntries(entries: AgendaEntry[]): void {
+  const cycles = getCropCycles()
+  const today = todayDateString()
+
+  for (const cycle of cycles) {
+    if (
+      cycle.status === 'Planejado' &&
+      cycle.plantingDate
+    ) {
+      entries.push({
+        id: `crops:planting:${cycle.id}`,
+        title: `Plantio: ${cycle.crop} — ${cycle.season}`,
+        type: 'Plantio',
+        date: cycle.plantingDate,
+        priority: 'Média',
+        status: getDerivedDisplayStatus(cycle.plantingDate),
+        source: 'crops',
+        sourceLabel: 'Cultivos',
+        sourceRecordId: cycle.id,
+        sourcePath: `/cultivos/${cycle.id}`,
+        editable: false,
+      })
+    }
+
+    if (
+      (cycle.status === 'Planejado' || cycle.status === 'Em andamento') &&
+      cycle.expectedHarvestDate
+    ) {
+      const priority: AgendaActivityPriority =
+        cycle.expectedHarvestDate < today ? 'Alta' : 'Média'
+
+      entries.push({
+        id: `crops:harvest:${cycle.id}`,
+        title: `Previsão de colheita: ${cycle.crop} — ${cycle.season}`,
+        type: 'Colheita',
+        date: cycle.expectedHarvestDate,
+        priority,
+        status: getDerivedDisplayStatus(cycle.expectedHarvestDate),
+        source: 'crops',
+        sourceLabel: 'Cultivos',
+        sourceRecordId: cycle.id,
+        sourcePath: `/cultivos/${cycle.id}`,
+        editable: false,
+      })
+    }
+  }
+}
+
+function buildInventoryEntries(entries: AgendaEntry[]): void {
+  const items = getInventoryItems()
+
+  for (const item of items) {
+    if (item.status !== 'Ativo') continue
+    if (!item.expirationDate) continue
+
+    const expirationStatus = getExpirationStatus(item.expirationDate)
+
+    let priority: AgendaActivityPriority = 'Baixa'
+
+    if (expirationStatus === 'Vencido') {
+      priority = 'Alta'
+    } else if (expirationStatus === 'Vence em breve') {
+      priority = 'Média'
+    }
+
+    entries.push({
+      id: `inventory:expiration:${item.id}`,
+      title: `Validade: ${item.name}`,
+      type: 'Validade de estoque',
+      date: item.expirationDate,
+      priority,
+      status: getDerivedDisplayStatus(item.expirationDate),
+      source: 'inventory',
+      sourceLabel: 'Estoque',
+      sourceRecordId: item.id,
+      sourcePath: `/estoque/${item.id}`,
+      editable: false,
+    })
+  }
+}
+
+export function getAgendaEntriesForUser(user: User | null): AgendaEntry[] {
+  if (!user) return []
+  if (!userHasPermission(user, 'agenda')) return []
+
+  const entries: AgendaEntry[] = []
+
+  for (const activity of getAgendaActivities()) {
+    entries.push(buildActivityEntry(activity))
+  }
+
+  if (userHasPermission(user, 'health')) {
+    buildHealthEntries(entries)
+  }
+
+  if (userHasPermission(user, 'crops')) {
+    buildCropsEntries(entries)
+  }
+
+  if (userHasPermission(user, 'inventory')) {
+    buildInventoryEntries(entries)
+  }
+
+  return entries.sort((a, b) => {
+    const dateCompare = a.date.localeCompare(b.date)
+    if (dateCompare !== 0) return dateCompare
+
+    const aTime = a.time ?? ''
+    const bTime = b.time ?? ''
+    const timeCompare = aTime.localeCompare(bTime)
+    if (timeCompare !== 0) return timeCompare
+
+    return a.title.localeCompare(b.title, 'pt-BR')
+  })
+}
+
+// -------------------- Lookup conveniente --------------------
+
+export function getAgendaEmployeeOptions(): {
+  id: string
+  name: string
+  inactive: boolean
+}[] {
+  return getEmployees()
+    .map(employee => ({
+      id: employee.id,
+      name: employee.name,
+      inactive: employee.status === 'Inativo',
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+}
+
+========================================================================
+ARQUIVO: src/services/animalService.ts
+========================================================================
+
+import { Animal, AnimalEvent, Lot } from '../types'
+import { getStorageItem, setStorageItem, generateId } from './storage'
+import { getLots } from './lotService'
+import { clearHealthRecordsForAnimal } from './healthCleanupService'
+import {
+  animalHasVaccinationWithStockConsumption,
+  animalHasTreatmentWithStockConsumption,
+} from './healthService'
+
+const ANIMALS_KEY = 'agro360_animals'
+const EVENTS_KEY = 'agro360_animal_events'
+const INITIALIZED_KEY = 'agro360_animals_initialized'
+
+function getInitialAnimals(): Animal[] {
+  const lots = getLots()
+  const initialLots = lots.length > 0 ? lots : []
+  const now = new Date().toISOString()
+
+  return [
+    {
+      id: generateId(),
+      identification: 'BR-0001',
+      name: 'Estrela',
+      species: 'Bovino',
+      breed: 'Nelore',
+      sex: 'Fêmea',
+      birthDate: '2021-03-15',
+      category: 'Matriz',
+      status: 'Ativo',
+      lotId: initialLots[0]?.id,
+      currentWeight: 480,
+      origin: 'Nascimento na propriedade',
+      notes: 'Boa produtora de leite.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      identification: 'BR-0002',
+      name: 'Trovão',
+      species: 'Bovino',
+      breed: 'Angus',
+      sex: 'Macho',
+      birthDate: '2020-08-20',
+      category: 'Touro',
+      status: 'Ativo',
+      lotId: initialLots[0]?.id,
+      currentWeight: 750,
+      origin: 'Compra',
+      notes: 'Reprodutor principal.',
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: generateId(),
+      identification: 'BR-0003',
+      name: 'Lua',
+      species: 'Bovino',
+      breed: 'Nelore',
+      sex: 'Fêmea',
+      birthDate: '2022-01-10',
+      category: 'Novilha',
+      status: 'Ativo',
+      lotId: initialLots[1]?.id,
+      currentWeight: 320,
+      origin: 'Nascimento na propriedade',
+      createdAt: now,
+      updatedAt: now,
+    },
+  ]
+}
+
+function initializeAnimalsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(INITIALIZED_KEY, false)
+
+  if (!initialized) {
+    const initial = getInitialAnimals()
+    setStorageItem(ANIMALS_KEY, initial)
+    setStorageItem(INITIALIZED_KEY, true)
+  }
+}
+
+function normalizeIdentification(identification: string): string {
+  return identification.trim().toLowerCase()
+}
+
+function isDuplicateIdentification(
+  identification: string,
+  excludeId?: string
+): boolean {
+  const animals = getAnimals()
+  const normalized = normalizeIdentification(identification)
+
+  return animals.some(
+    animal =>
+      normalizeIdentification(animal.identification) === normalized &&
+      animal.id !== excludeId
+  )
+}
+
+export function getAnimals(): Animal[] {
+  initializeAnimalsIfNeeded()
+  return getStorageItem<Animal[]>(ANIMALS_KEY, [])
+}
+
+export function getAnimalById(id: string): Animal | undefined {
+  return getAnimals().find(animal => animal.id === id)
+}
+
+export function createAnimal(
+  data: Omit<Animal, 'id' | 'createdAt' | 'updatedAt'>
+): Animal {
+  getAnimals()
+
+  if (isDuplicateIdentification(data.identification)) {
+    throw new Error(
+      'Já existe um animal cadastrado com esta identificação.'
+    )
+  }
+
+  const animals = getAnimals()
+  const now = new Date().toISOString()
+
+  const newAnimal: Animal = {
+    ...data,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  animals.push(newAnimal)
+  setStorageItem(ANIMALS_KEY, animals)
+
+  addAnimalEvent({
+    animalId: newAnimal.id,
+    type: 'created',
+    description: 'Animal cadastrado',
+  })
+
+  return newAnimal
+}
+
+export function updateAnimal(
+  id: string,
+  data: Partial<Animal>
+): Animal | undefined {
+  const animals = getAnimals()
+  const index = animals.findIndex(animal => animal.id === id)
+
+  if (index === -1) return undefined
+
+  const oldAnimal = animals[index]
+
+  if (data.identification !== undefined) {
+    const oldNormalized = normalizeIdentification(oldAnimal.identification)
+    const newNormalized = normalizeIdentification(data.identification)
+
+    if (
+      oldNormalized !== newNormalized &&
+      isDuplicateIdentification(data.identification, id)
+    ) {
+      throw new Error(
+        'Já existe um animal cadastrado com esta identificação.'
+      )
+    }
+  }
+
+  const now = new Date().toISOString()
+
+  const updatedAnimal: Animal = {
+    ...oldAnimal,
+    ...data,
+    id: oldAnimal.id,
+    createdAt: oldAnimal.createdAt,
+    updatedAt: now,
+  }
+
+  animals[index] = updatedAnimal
+  setStorageItem(ANIMALS_KEY, animals)
+
+  addAnimalEvent({
+    animalId: id,
+    type: 'updated',
+    description: 'Cadastro atualizado',
+  })
+
+  if ('lotId' in data) {
+    const oldLotId = oldAnimal.lotId
+    const newLotId = data.lotId
+
+    if (oldLotId !== newLotId) {
+      const oldLotName = oldLotId
+        ? getLotName(oldLotId)
+        : 'Sem lote'
+
+      const newLotName = newLotId
+        ? getLotName(newLotId)
+        : 'Sem lote'
+
+      addAnimalEvent({
+        animalId: id,
+        type: 'lot_change',
+        description: `Transferido do lote "${oldLotName}" para "${newLotName}"`,
+      })
+    }
+  }
+
+  if (
+    data.status !== undefined &&
+    data.status !== oldAnimal.status
+  ) {
+    addAnimalEvent({
+      animalId: id,
+      type: 'status_change',
+      description: `Situação alterada de "${oldAnimal.status}" para "${data.status}"`,
+    })
+  }
+
+  return updatedAnimal
+}
+
+export function deleteAnimal(id: string): boolean {
+  if (animalHasVaccinationWithStockConsumption(id)) {
+    throw new Error(
+      'Não é possível excluir este animal porque ele possui vacinação com baixa de estoque registrada.'
+    )
+  }
+
+  if (animalHasTreatmentWithStockConsumption(id)) {
+    throw new Error(
+      'Não é possível excluir este animal porque ele possui tratamento com baixa de estoque registrada.'
+    )
+  }
+
+  const animals = getAnimals()
+  const filtered = animals.filter(animal => animal.id !== id)
+
+  if (filtered.length === animals.length) return false
+
+  setStorageItem(ANIMALS_KEY, filtered)
+
+  const allEvents = getStorageItem<AnimalEvent[]>(EVENTS_KEY, [])
+  const filteredEvents = allEvents.filter(event => event.animalId !== id)
+  setStorageItem(EVENTS_KEY, filteredEvents)
+
+  clearHealthRecordsForAnimal(id)
+
+  return true
+}
+
+export function clearLotFromAnimals(
+  lotId: string,
+  lotName?: string
+): void {
+  const animals = getAnimals()
+  const name = lotName ?? getLotName(lotId)
+
+  const updatedAnimals = animals.map(animal => {
+    if (animal.lotId === lotId) {
+      addAnimalEvent({
+        animalId: animal.id,
+        type: 'lot_change',
+        description: `Transferido do lote "${name}" para "Sem lote"`,
+      })
+
+      return {
+        ...animal,
+        lotId: undefined,
+        updatedAt: new Date().toISOString(),
+      }
+    }
+
+    return animal
+  })
+
+  setStorageItem(ANIMALS_KEY, updatedAnimals)
+}
+
+export function getAnimalEvents(animalId: string): AnimalEvent[] {
+  const allEvents = getStorageItem<AnimalEvent[]>(EVENTS_KEY, [])
+
+  return allEvents
+    .filter(event => event.animalId === animalId)
+    .sort(
+      (a, b) =>
+        new Date(b.date).getTime() -
+        new Date(a.date).getTime()
+    )
+}
+
+function addAnimalEvent(
+  event: Omit<AnimalEvent, 'id' | 'date'>
+): AnimalEvent {
+  const events = getStorageItem<AnimalEvent[]>(EVENTS_KEY, [])
+
+  const newEvent: AnimalEvent = {
+    ...event,
+    id: generateId(),
+    date: new Date().toISOString(),
+  }
+
+  events.push(newEvent)
+  setStorageItem(EVENTS_KEY, events)
+
+  return newEvent
+}
+
+export function getAnimalLots(): Lot[] {
+  return getLots()
+}
+
+export function getLotName(lotId: string): string {
+  const lot = getLots().find(lot => lot.id === lotId)
+  return lot?.name ?? 'Lote desconhecido'
+}
+
+========================================================================
+ARQUIVO: src/services/landService.ts
+========================================================================
+
+import {
+  LandArea,
+  LandAreaType,
+  LandAreaStatus,
+  PaddockOccupation,
+} from '../types'
+import {
+  getStorageItem,
+  setStorageItem,
+  generateId,
+} from './storage'
+
+const LAND_AREAS_KEY =
+  'agro360_land_areas'
+
+const INITIALIZED_KEY =
+  'agro360_land_areas_initialized'
+
+const OCCUPATIONS_KEY =
+  'agro360_paddock_occupations'
+
+const STRUCTURES_KEY =
+  'agro360_rural_structures'
+
+const LAND_USE_RECORDS_KEY =
+  'agro360_land_use_records'
+
+const CROP_CYCLES_KEY =
+  'agro360_crop_cycles'
+
+const SOIL_ANALYSES_KEY =
+  'agro360_soil_analyses'
+
+const LAND_AREA_TYPES:
+  LandAreaType[] = [
+  'Piquete',
+  'Talhão',
+  'Pastagem',
+  'Reserva/APP',
+  'Infraestrutura',
+  'Área ociosa',
+  'Outro',
+]
+
+const LAND_AREA_STATUSES:
+  LandAreaStatus[] = [
+  'Em uso',
+  'Em descanso',
+  'Em recuperação',
+  'Inativa',
+]
+
+type LandAreaInput = Omit<
+  LandArea,
+  'id' | 'createdAt' | 'updatedAt'
+>
+
+function initializeLandAreasIfNeeded(): void {
+  const initialized =
+    getStorageItem<boolean>(
+      INITIALIZED_KEY,
+      false
+    )
+
+  if (!initialized) {
+    setStorageItem(
+      LAND_AREAS_KEY,
+      []
+    )
+
+    setStorageItem(
+      INITIALIZED_KEY,
+      true
+    )
+  }
+}
+
+function normalizeCode(
+  code: string
+): string {
+  return code
+    .trim()
+    .toLowerCase()
+}
+
+function isDuplicateCode(
+  code: string,
+  excludeId?: string
+): boolean {
+  const areas =
+    getLandAreas()
+
+  const normalized =
+    normalizeCode(code)
+
+  return areas.some(
+    area =>
+      normalizeCode(
+        area.code
+      ) === normalized &&
+      area.id !== excludeId
+  )
+}
+
+function validateAndNormalizeLandAreaData(
+  data: LandAreaInput
+): LandAreaInput {
+  const code =
+    data.code.trim()
+
+  if (!code) {
+    throw new Error(
+      'Código é obrigatório.'
+    )
+  }
+
+  const name =
+    data.name.trim()
+
+  if (!name) {
+    throw new Error(
+      'Nome é obrigatório.'
+    )
+  }
+
+  if (
+    !LAND_AREA_TYPES.includes(
+      data.type
+    )
+  ) {
+    throw new Error(
+      'Tipo de área inválido.'
+    )
+  }
+
+  if (
+    !Number.isFinite(
+      data.areaHectares
+    ) ||
+    data.areaHectares <= 0
+  ) {
+    throw new Error(
+      'Área em hectares deve ser maior que zero.'
+    )
+  }
+
+  if (
+    !LAND_AREA_STATUSES.includes(
+      data.status
+    )
+  ) {
+    throw new Error(
+      'Situação de área inválida.'
+    )
+  }
+
+  const purpose =
+    data.purpose?.trim() ||
+    undefined
+
+  const description =
+    data.description?.trim() ||
+    undefined
+
+  return {
+    code,
+    name,
+    type: data.type,
+    areaHectares:
+      data.areaHectares,
+    purpose,
+    status: data.status,
+    description,
+  }
+}
+
+function getOccupationsByLandAreaId(
+  landAreaId: string
+): PaddockOccupation[] {
+  const raw =
+    getStorageItem<
+      PaddockOccupation[]
+    >(
+      OCCUPATIONS_KEY,
+      []
+    )
+
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw.filter(
+    occ =>
+      occ.landAreaId ===
+      landAreaId
+  )
+}
+
+function hasActiveOccupation(
+  landAreaId: string
+): boolean {
+  return getOccupationsByLandAreaId(
+    landAreaId
+  ).some(
+    occ => !occ.exitDate
+  )
+}
+
+function hasLandUseRecordsByAreaId(
+  landAreaId: string
+): boolean {
+  const raw =
+    getStorageItem<unknown>(
+      LAND_USE_RECORDS_KEY,
+      []
+    )
+
+  if (!Array.isArray(raw)) {
+    return false
+  }
+
+  return raw.some(item => {
+    if (
+      !item ||
+      typeof item !== 'object'
+    ) {
+      return false
+    }
+
+    const record =
+      item as Record<
+        string,
+        unknown
+      >
+
+    return (
+      typeof record.landAreaId ===
+        'string' &&
+      record.landAreaId ===
+        landAreaId
+    )
+  })
+}
+
+function hasCropCyclesByAreaId(
+  landAreaId: string
+): boolean {
+  const raw =
+    getStorageItem<unknown>(
+      CROP_CYCLES_KEY,
+      []
+    )
+
+  if (!Array.isArray(raw)) {
+    return false
+  }
+
+  return raw.some(item => {
+    if (
+      !item ||
+      typeof item !== 'object'
+    ) {
+      return false
+    }
+
+    const record =
+      item as Record<
+        string,
+        unknown
+      >
+
+    return (
+      typeof record.landAreaId ===
+        'string' &&
+      record.landAreaId ===
+        landAreaId
+    )
+  })
+}
+
+function hasSoilAnalysesByAreaId(
+  landAreaId: string
+): boolean {
+  const raw =
+    getStorageItem<unknown>(
+      SOIL_ANALYSES_KEY,
+      []
+    )
+
+  if (!Array.isArray(raw)) {
+    return false
+  }
+
+  return raw.some(item => {
+    if (
+      !item ||
+      typeof item !== 'object'
+    ) {
+      return false
+    }
+
+    const record =
+      item as Record<
+        string,
+        unknown
+      >
+
+    return (
+      typeof record.landAreaId ===
+        'string' &&
+      record.landAreaId ===
+        landAreaId
+    )
+  })
+}
+
+function removeLandAreaFromStructures(
+  landAreaId: string
+): void {
+  const raw =
+    getStorageItem<unknown>(
+      STRUCTURES_KEY,
+      []
+    )
+
+  if (!Array.isArray(raw)) {
+    return
+  }
+
+  const updated = raw
+    .filter(
+      (
+        item
+      ): item is Record<
+        string,
+        unknown
+      > =>
+        !!item &&
+        typeof item ===
+          'object'
+    )
+    .map(item => {
+      const landAreaIds =
+        item.landAreaIds
+
+      if (
+        !Array.isArray(
+          landAreaIds
+        )
+      ) {
+        return item
+      }
+
+      const validIds =
+        landAreaIds.filter(
+          (
+            id
+          ): id is string =>
+            typeof id ===
+            'string'
+        )
+
+      if (
+        !validIds.includes(
+          landAreaId
+        )
+      ) {
+        return item
+      }
+
+      return {
+        ...item,
+        landAreaIds:
+          validIds.filter(
+            id =>
+              id !==
+              landAreaId
+          ),
+        updatedAt:
+          new Date().toISOString(),
+      }
+    })
+
+  setStorageItem(
+    STRUCTURES_KEY,
+    updated
+  )
+}
+
+export function getLandAreas(): LandArea[] {
+  initializeLandAreasIfNeeded()
+
+  const stored =
+    getStorageItem<
+      LandArea[]
+    >(
+      LAND_AREAS_KEY,
+      []
+    )
+
+  return Array.isArray(stored)
+    ? stored
+    : []
+}
+
+export function getLandAreaById(
+  id: string
+): LandArea | undefined {
+  return getLandAreas().find(
+    area =>
+      area.id === id
+  )
+}
+
+export function getLandAreaByCode(
+  code: string
+): LandArea | undefined {
+  const normalized =
+    normalizeCode(code)
+
+  return getLandAreas().find(
+    area =>
+      normalizeCode(
+        area.code
+      ) === normalized
+  )
+}
+
+export function createLandArea(
+  data: LandAreaInput
+): LandArea {
+  initializeLandAreasIfNeeded()
+
+  const normalized =
+    validateAndNormalizeLandAreaData(
+      data
+    )
+
+  if (
+    isDuplicateCode(
+      normalized.code
+    )
+  ) {
+    throw new Error(
+      'Já existe uma área cadastrada com este código.'
+    )
+  }
+
+  const areas =
+    getLandAreas()
+
+  const now =
+    new Date().toISOString()
+
+  const newArea: LandArea = {
+    ...normalized,
+    id: generateId(),
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  areas.push(newArea)
+
+  setStorageItem(
+    LAND_AREAS_KEY,
+    areas
+  )
+
+  return newArea
+}
+
+export function updateLandArea(
+  id: string,
+  data: LandAreaInput
+): LandArea | undefined {
+  const areas =
+    getLandAreas()
+
+  const index =
+    areas.findIndex(
+      area =>
+        area.id === id
+    )
+
+  if (index === -1) {
+    return undefined
+  }
+
+  const oldArea =
+    areas[index]
+
+  const normalized =
+    validateAndNormalizeLandAreaData(
+      data
+    )
+
+  if (
+    isDuplicateCode(
+      normalized.code,
+      id
+    )
+  ) {
+    throw new Error(
+      'Já existe uma área cadastrada com este código.'
+    )
+  }
+
+  if (
+    oldArea.type ===
+      'Piquete' &&
+    normalized.type !==
+      'Piquete'
+  ) {
+    const hasOccupationHistory =
+      getOccupationsByLandAreaId(
+        id
+      ).length > 0
+
+    if (
+      hasOccupationHistory
+    ) {
+      throw new Error(
+        'Não é possível alterar o tipo deste piquete porque existem registros de ocupação vinculados.'
+      )
+    }
+  }
+
+  if (
+    hasActiveOccupation(id) &&
+    (
+      normalized.status ===
+        'Inativa' ||
+      normalized.status ===
+        'Em recuperação'
+    )
+  ) {
+    throw new Error(
+      'Encerre a ocupação atual antes de alterar o piquete para esta situação.'
+    )
+  }
+
+  if (
+    oldArea.type ===
+      'Talhão' &&
+    normalized.type !==
+      'Talhão'
+  ) {
+    const hasCropHistory =
+      hasCropCyclesByAreaId(
+        id
+      )
+
+    if (hasCropHistory) {
+      throw new Error(
+        'Não é possível alterar o tipo deste talhão porque existem registros de cultivo vinculados.'
+      )
+    }
+  }
+
+  if (
+    oldArea.type ===
+      'Talhão' &&
+    normalized.type !==
+      'Talhão'
+  ) {
+    const hasSoilHistory =
+      hasSoilAnalysesByAreaId(
+        id
+      )
+
+    if (hasSoilHistory) {
+      throw new Error(
+        'Não é possível alterar o tipo deste talhão porque existem análises de solo vinculadas.'
+      )
+    }
+  }
+
+  const updatedArea:
+    LandArea = {
+    ...normalized,
+    id: oldArea.id,
+    createdAt:
+      oldArea.createdAt,
+    updatedAt:
+      new Date().toISOString(),
+  }
+
+  areas[index] =
+    updatedArea
+
+  setStorageItem(
+    LAND_AREAS_KEY,
+    areas
+  )
+
+  return updatedArea
+}
+
+export function deleteLandArea(
+  id: string
+): boolean {
+  const areas =
+    getLandAreas()
+
+  const area =
+    areas.find(
+      a => a.id === id
+    )
+
+  if (!area) {
+    return false
+  }
+
+  if (
+    getOccupationsByLandAreaId(
+      id
+    ).length > 0
+  ) {
+    throw new Error(
+      'Não é possível excluir este piquete porque existem registros de ocupação vinculados.'
+    )
+  }
+
+  if (
+    hasLandUseRecordsByAreaId(
+      id
+    )
+  ) {
+    throw new Error(
+      'Não é possível excluir esta área porque existem registros de utilização vinculados.'
+    )
+  }
+
+  if (
+    hasCropCyclesByAreaId(
+      id
+    )
+  ) {
+    throw new Error(
+      'Não é possível excluir este talhão porque existem registros de cultivo vinculados.'
+    )
+  }
+
+  if (
+    hasSoilAnalysesByAreaId(
+      id
+    )
+  ) {
+    throw new Error(
+      'Não é possível excluir este talhão porque existem análises de solo vinculadas.'
+    )
+  }
+
+  const filtered =
+    areas.filter(
+      area =>
+        area.id !== id
+    )
+
+  if (
+    filtered.length ===
+    areas.length
+  ) {
+    return false
+  }
+
+  setStorageItem(
+    LAND_AREAS_KEY,
+    filtered
+  )
+
+  removeLandAreaFromStructures(
+    id
+  )
+
+  return true
+}
+
+export function getLandAreaCount(): number {
+  return getLandAreas().length
+}
+
+export function getTotalRegisteredHectares(): number {
+  return getLandAreas().reduce(
+    (sum, area) =>
+      sum +
+      area.areaHectares,
+    0
+  )
+}
+
+========================================================================
+ARQUIVO: src/services/paddockOccupationService.ts
+========================================================================
+
+import { PaddockOccupation, Animal } from '../types'
+import { getStorageItem, setStorageItem, generateId } from './storage'
+import { getLandAreas } from './landService'
+import { getLotById } from './lotService'
+import { getAnimals } from './animalService'
+
+const OCCUPATIONS_KEY = 'agro360_paddock_occupations'
+const INITIALIZED_KEY = 'agro360_paddock_occupations_initialized'
+
+function initializeOccupationsIfNeeded(): void {
+  const initialized = getStorageItem<boolean>(INITIALIZED_KEY, false)
+  if (!initialized) {
+    setStorageItem(OCCUPATIONS_KEY, [])
+    setStorageItem(INITIALIZED_KEY, true)
+  }
+}
+
+function isValidDateString(dateString: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return false
+
+  const [year, month, day] = dateString.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  )
+}
+
+function normalizeDate(dateString: string): string {
+  const trimmed = dateString.trim()
+  if (!isValidDateString(trimmed)) {
+    throw new Error('Data inválida. Use o formato YYYY-MM-DD.')
+  }
+  return trimmed
+}
+
+function parseDateToUTC(dateString: string): Date {
+  const [year, month, day] = dateString.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day))
+}
+
+function todayLocalDateString(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function isFutureDate(dateString: string): boolean {
+  return parseDateToUTC(dateString).getTime() > parseDateToUTC(todayLocalDateString()).getTime()
+}
+
+function isEndBeforeStart(startDate: string, endDate: string): boolean {
+  return parseDateToUTC(endDate).getTime() < parseDateToUTC(startDate).getTime()
+}
+
+function getActiveOccupations(): PaddockOccupation[] {
+  return getPaddockOccupations().filter(occ => !occ.exitDate)
+}
+
+function getAnimalsByLotId(lotId: string): Animal[] {
+  return getAnimals().filter(animal => animal.lotId === lotId)
+}
+
+function validateStartOccupation(data: {
+  landAreaId: string
+  lotId: string
+  entryDate: string
+  notes?: string
+}): {
+  landAreaId: string
+  lotId: string
+  entryDate: string
+  notes?: string
+} {
+  const landAreaId = data.landAreaId.trim()
+  if (!landAreaId) {
+    throw new Error('Piquete é obrigatório.')
+  }
+
+  const lotId = data.lotId.trim()
+  if (!lotId) {
+    throw new Error('Lote é obrigatório.')
+  }
+
+  const entryDate = normalizeDate(data.entryDate)
+
+  if (isFutureDate(entryDate)) {
+    throw new Error('Data de entrada não pode ser futura.')
+  }
+
+  const area = getLandAreas().find(a => a.id === landAreaId)
+  if (!area) {
+    throw new Error('Área não encontrada.')
+  }
+
+  if (area.type !== 'Piquete') {
+    throw new Error('Somente áreas do tipo Piquete podem receber ocupação.')
+  }
+
+  if (area.status === 'Inativa' || area.status === 'Em recuperação') {
+    throw new Error('Este piquete não está disponível para ocupação devido à sua situação atual.')
+  }
+
+  const lot = getLotById(lotId)
+  if (!lot) {
+    throw new Error('Lote não encontrado.')
+  }
+
+  const activeAreaOccupation = getActiveOccupations().find(occ => occ.landAreaId === landAreaId)
+  if (activeAreaOccupation) {
+    throw new Error('Este piquete já possui ocupação ativa.')
+  }
+
+  const activeLotOccupation = getActiveOccupations().find(occ => occ.lotId === lotId)
+  if (activeLotOccupation) {
+    throw new Error('Este lote já possui ocupação ativa.')
+  }
+
+  return {
+    landAreaId,
+    lotId,
+    entryDate,
+    notes: data.notes?.trim() || undefined,
+  }
+}
+
+export function getPaddockOccupations(): PaddockOccupation[] {
+  initializeOccupationsIfNeeded()
+  const raw = getStorageItem<PaddockOccupation[]>(OCCUPATIONS_KEY, [])
+  return Array.isArray(raw) ? raw : []
+}
+
+export function getPaddockOccupationById(id: string): PaddockOccupation | undefined {
+  return getPaddockOccupations().find(occ => occ.id === id)
+}
+
+export function getActivePaddockOccupations(): PaddockOccupation[] {
+  return getPaddockOccupations()
+    .filter(occ => !occ.exitDate)
+    .sort((a, b) => parseDateToUTC(b.entryDate).getTime() - parseDateToUTC(a.entryDate).getTime())
+}
+
+export function getActiveOccupationByLandAreaId(landAreaId: string): PaddockOccupation | undefined {
+  return getActivePaddockOccupations().find(occ => occ.landAreaId === landAreaId)
+}
+
+export function getActiveOccupationByLotId(lotId: string): PaddockOccupation | undefined {
+  return getActivePaddockOccupations().find(occ => occ.lotId === lotId)
+}
+
+export function getOccupationHistoryByLandAreaId(landAreaId: string): PaddockOccupation[] {
+  return getPaddockOccupations()
+    .filter(occ => occ.landAreaId === landAreaId && occ.exitDate)
+    .sort((a, b) => (b.exitDate ?? b.entryDate).localeCompare(a.exitDate ?? a.entryDate))
+}
+
+export function getOccupationHistoryByLotId(lotId: string): PaddockOccupation[] {
+  return getPaddockOccupations()
+    .filter(occ => occ.lotId === lotId && occ.exitDate)
+    .sort((a, b) => (b.exitDate ?? b.entryDate).localeCompare(a.exitDate ?? a.entryDate))
+}
+
+export function startPaddockOccupation(data: {
+  landAreaId: string
+  lotId: string
+  entryDate: string
+  notes?: string
+}): PaddockOccupation {
+  const normalized = validateStartOccupation(data)
+
+  const occupations = getPaddockOccupations()
+  const now = new Date().toISOString()
+
+  const newOccupation: PaddockOccupation = {
+    id: generateId(),
+    landAreaId: normalized.landAreaId,
+    lotId: normalized.lotId,
+    entryDate: normalized.entryDate,
+    notes: normalized.notes,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  occupations.push(newOccupation)
+  setStorageItem(OCCUPATIONS_KEY, occupations)
+  return newOccupation
+}
+
+export function finishPaddockOccupation(id: string, exitDate: string): PaddockOccupation | undefined {
+  const occupations = getPaddockOccupations()
+  const index = occupations.findIndex(occ => occ.id === id)
+  if (index === -1) {
+    throw new Error('Ocupação não encontrada.')
+  }
+
+  const occupation = occupations[index]
+  if (occupation.exitDate) {
+    throw new Error('Esta ocupação já foi encerrada.')
+  }
+
+  const normalizedExitDate = normalizeDate(exitDate)
+
+  if (isFutureDate(normalizedExitDate)) {
+    throw new Error('Data de saída não pode ser futura.')
+  }
+
+  if (isEndBeforeStart(occupation.entryDate, normalizedExitDate)) {
+    throw new Error('Data de saída não pode ser anterior à data de entrada.')
+  }
+
+  const updated: PaddockOccupation = {
+    ...occupation,
+    exitDate: normalizedExitDate,
+    updatedAt: new Date().toISOString(),
+  }
+
+  occupations[index] = updated
+  setStorageItem(OCCUPATIONS_KEY, occupations)
+  return updated
+}
+
+export function getOccupiedPaddockCount(): number {
+  return getActivePaddockOccupations().length
+}
+
+export function getPaddockCount(): number {
+  return getLandAreas().filter(area => area.type === 'Piquete').length
+}
+
+export function getAvailablePaddockCount(): number {
+  return getPaddockCount() - getOccupiedPaddockCount()
+}
+
+export function getCurrentLotsInPaddocksCount(): number {
+  return getActivePaddockOccupations().length
+}
+
+export function getCurrentAnimalsInPaddocksCount(): number {
+  const active = getActivePaddockOccupations()
+  return active.reduce((total, occ) => {
+    return total + getAnimalsByLotId(occ.lotId).length
+  }, 0)
+}
+
+export function getAnimalsInPaddockOccupation(occupation: PaddockOccupation): Animal[] {
+  return getAnimalsByLotId(occupation.lotId)
+}
+
+export function getDaysBetween(startDate: string, endDate: string): number {
+  const start = parseDateToUTC(startDate)
+  const end = parseDateToUTC(endDate)
+  const ms = end.getTime() - start.getTime()
+  return Math.max(0, Math.round(ms / (1000 * 60 * 60 * 24)))
+}
+
+export function getCurrentOccupationDays(occupation: PaddockOccupation): number {
+  const end = occupation.exitDate ?? todayLocalDateString()
+  return getDaysBetween(occupation.entryDate, end)
+}
