@@ -8,6 +8,7 @@ import {
 import { User } from '../types'
 import * as authService from '../services/authService'
 import { supabase } from '../lib/supabase'
+import { resetStorageBackend } from '../services/storage'
 
 interface AuthContextType {
   user: User | null
@@ -49,6 +50,7 @@ export function AuthProvider({
     } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (!session) {
+          resetStorageBackend()
           setUser(null)
         }
       },
@@ -91,6 +93,7 @@ export function AuthProvider({
     email: string,
     password: string,
   ): Promise<User> => {
+    resetStorageBackend()
     const loggedUser = await authService.login(email, password)
     setUser(loggedUser)
     return loggedUser
@@ -115,6 +118,7 @@ export function AuthProvider({
   }
 
   const logout = () => {
+    resetStorageBackend()
     setUser(null)
 
     void authService.logout().catch(() => {
