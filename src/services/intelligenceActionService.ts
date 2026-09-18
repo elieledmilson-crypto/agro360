@@ -998,3 +998,898 @@ function runUpdateMachineStatus(
       success: true,
       message:
         `A máquina ${target.code} já está com situação "${data.newStatus}".`,
+    }
+  }
+
+  try {
+    const fullInput:
+      Omit<
+        Machine,
+        | 'id'
+        | 'createdAt'
+        | 'updatedAt'
+      > = {
+        code:
+          target.code,
+        name:
+          target.name,
+        category:
+          target.category,
+        brand:
+          target.brand,
+        model:
+          target.model,
+        year:
+          target.year,
+        identification:
+          target.identification,
+        hourMeter:
+          target.hourMeter,
+        status:
+          data.newStatus,
+        notes:
+          target.notes,
+      }
+
+    const updated =
+      updateMachine(
+        target.id,
+        fullInput,
+      )
+
+    if (!updated) {
+      return {
+        success: false,
+        message:
+          'Nada foi alterado. Não foi possível atualizar a máquina.',
+      }
+    }
+
+    return {
+      success: true,
+      message:
+        `Máquina ${updated.code} atualizada para "${updated.status}" com sucesso.`,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        `Nada foi alterado. Não foi possível atualizar a máquina: ${safeErrorMessage(error)}.`,
+    }
+  }
+}
+
+export function executeIntelligenceAction(
+  user: User | null,
+  proposal:
+    IntelligenceActionProposal,
+): IntelligenceActionResult {
+  const permissionError =
+    getIntelligenceActionPermissionError(
+      user,
+      proposal,
+    )
+
+  if (permissionError) {
+    return {
+      success: false,
+      message:
+        permissionError,
+    }
+  }
+
+  switch (proposal.type) {
+    case 'create_land_area':
+      return runCreateLandArea(
+        proposal.data,
+      )
+
+    case 'create_animal':
+      return runCreateAnimal(
+        proposal.data,
+      )
+
+    case 'create_agenda_activity':
+      return runCreateAgendaActivity(
+        proposal.data,
+      )
+
+    case 'create_financial_transaction':
+      return runCreateFinancialTransaction(
+        proposal.data,
+      )
+
+    case 'create_inventory_movement':
+      return runCreateInventoryMovement(
+        proposal.data,
+      )
+
+    case 'create_crop_cycle':
+      return runCreateCropCycle(
+        proposal.data,
+      )
+
+    case 'update_machine_status':
+      return runUpdateMachineStatus(
+        proposal.data,
+      )
+  }
+}
+
+export interface ActionFieldDescriptor {
+  label: string
+  value: string
+}
+
+export interface ActionDescriptor {
+  title: string
+  moduleLabel: string
+  fields:
+    ActionFieldDescriptor[]
+  warning: string
+}
+
+function safeString(
+  value: unknown,
+  fallback = '—',
+): string {
+  if (
+    typeof value !== 'string'
+  ) {
+    return fallback
+  }
+
+  const trimmed =
+    value.trim()
+
+  return trimmed.length > 0
+    ? trimmed
+    : fallback
+}
+
+function safeFormatHectares(
+  value: unknown,
+): string {
+  if (
+    typeof value !==
+      'number' ||
+    !Number.isFinite(value)
+  ) {
+    return '0,00 ha'
+  }
+
+  return `${value.toLocaleString(
+    'pt-BR',
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    },
+  )} ha`
+}
+
+function safeFormatCurrency(
+  value: unknown,
+): string {
+  if (
+    typeof value !==
+      'number' ||
+    !Number.isFinite(value)
+  ) {
+    return 'R$ 0,00'
+  }
+
+  return value.toLocaleString(
+    'pt-BR',
+    {
+      style:
+        'currency',
+      currency:
+        'BRL',
+    },
+  )
+}
+
+function safeFormatQuantity(
+  value: unknown,
+  unit:
+    string | undefined,
+): string {
+  if (
+    typeof value !==
+      'number' ||
+    !Number.isFinite(value)
+  ) {
+    return unit
+      ? `0 ${unit}`
+      : '0'
+  }
+
+  return unit
+    ? `${value} ${unit}`
+    : String(value)
+}
+
+export function describeAction(
+  proposal:
+    IntelligenceActionProposal,
+): ActionDescriptor {
+  switch (proposal.type) {
+    case 'create_land_area': {
+      const data =
+        proposal.data
+
+      const fields:
+        ActionFieldDescriptor[] =
+          [
+            {
+              label:
+                'Código',
+              value:
+                safeString(
+                  data.code,
+                ),
+            },
+            {
+              label:
+                'Nome',
+              value:
+                safeString(
+                  data.name,
+                ),
+            },
+            {
+              label:
+                'Tipo',
+              value:
+                safeString(
+                  data.type,
+                ),
+            },
+            {
+              label:
+                'Área',
+              value:
+                safeFormatHectares(
+                  data.areaHectares,
+                ),
+            },
+            {
+              label:
+                'Situação',
+              value:
+                safeString(
+                  data.status,
+                ),
+            },
+          ]
+
+      const purpose =
+        safeString(
+          data.purpose,
+          '',
+        )
+
+      if (purpose) {
+        fields.push({
+          label:
+            'Finalidade',
+          value:
+            purpose,
+        })
+      }
+
+      const description =
+        safeString(
+          data.description,
+          '',
+        )
+
+      if (description) {
+        fields.push({
+          label:
+            'Descrição',
+          value:
+            description,
+        })
+      }
+
+      return {
+        title:
+          'Criar área',
+        moduleLabel:
+          'Terras',
+        fields,
+        warning:
+          'Nenhum registro é criado até você confirmar. Você poderá revisar o cadastro no módulo Terras após a confirmação.',
+      }
+    }
+
+    case 'create_animal': {
+      const data =
+        proposal.data
+
+      const fields:
+        ActionFieldDescriptor[] =
+          [
+            {
+              label:
+                'Identificação',
+              value:
+                safeString(
+                  data.identification,
+                ),
+            },
+          ]
+
+      const name =
+        safeString(
+          data.name,
+          '',
+        )
+
+      if (name) {
+        fields.push({
+          label: 'Nome',
+          value: name,
+        })
+      }
+
+      fields.push({
+        label:
+          'Espécie',
+        value:
+          safeString(
+            data.species,
+          ),
+      })
+
+      fields.push({
+        label: 'Raça',
+        value:
+          safeString(
+            data.breed,
+          ),
+      })
+
+      fields.push({
+        label: 'Sexo',
+        value:
+          safeString(
+            data.sex,
+          ),
+      })
+
+      const birth =
+        safeString(
+          data.birthDate,
+          '',
+        )
+
+      if (birth) {
+        fields.push({
+          label:
+            'Nascimento',
+          value:
+            birth,
+        })
+      }
+
+      fields.push({
+        label:
+          'Categoria',
+        value:
+          safeString(
+            data.category,
+          ),
+      })
+
+      fields.push({
+        label:
+          'Situação',
+        value:
+          safeString(
+            data.status,
+          ),
+      })
+
+      if (
+        typeof data.currentWeight ===
+          'number' &&
+        Number.isFinite(
+          data.currentWeight,
+        )
+      ) {
+        fields.push({
+          label:
+            'Peso atual',
+          value:
+            `${data.currentWeight} kg`,
+        })
+      }
+
+      const origin =
+        safeString(
+          data.origin,
+          '',
+        )
+
+      if (origin) {
+        fields.push({
+          label:
+            'Origem',
+          value:
+            origin,
+        })
+      }
+
+      return {
+        title:
+          'Criar animal',
+        moduleLabel:
+          'Animais',
+        fields,
+        warning:
+          'Nenhum registro é criado até você confirmar. Você poderá revisar o cadastro no módulo Animais após a confirmação.',
+      }
+    }
+
+    case 'create_agenda_activity': {
+      const data =
+        proposal.data
+
+      const fields:
+        ActionFieldDescriptor[] =
+          [
+            {
+              label:
+                'Título',
+              value:
+                safeString(
+                  data.title,
+                ),
+            },
+            {
+              label:
+                'Tipo',
+              value:
+                safeString(
+                  data.type,
+                ),
+            },
+            {
+              label:
+                'Data',
+              value:
+                safeString(
+                  data.date,
+                ),
+            },
+          ]
+
+      const time =
+        safeString(
+          data.time,
+          '',
+        )
+
+      if (time) {
+        fields.push({
+          label: 'Hora',
+          value: time,
+        })
+      }
+
+      fields.push({
+        label:
+          'Prioridade',
+        value:
+          safeString(
+            data.priority,
+          ),
+      })
+
+      fields.push({
+        label:
+          'Situação',
+        value:
+          safeString(
+            data.status,
+          ),
+      })
+
+      const notes =
+        safeString(
+          data.notes,
+          '',
+        )
+
+      if (notes) {
+        fields.push({
+          label: 'Notas',
+          value: notes,
+        })
+      }
+
+      return {
+        title:
+          'Criar atividade',
+        moduleLabel:
+          'Agenda',
+        fields,
+        warning:
+          'Nenhum registro é criado até você confirmar. Você poderá revisar a atividade no módulo Agenda após a confirmação.',
+      }
+    }
+
+    case 'create_financial_transaction': {
+      const data =
+        proposal.data
+
+      const category =
+        getFinancialCategoryById(
+          data.categoryId,
+        )
+
+      const categoryLabel =
+        category
+          ? category.name
+          : 'Categoria não encontrada'
+
+      const fields:
+        ActionFieldDescriptor[] =
+          [
+            {
+              label:
+                'Tipo',
+              value:
+                safeString(
+                  data.type,
+                ),
+            },
+            {
+              label:
+                'Data',
+              value:
+                safeString(
+                  data.date,
+                ),
+            },
+            {
+              label:
+                'Categoria',
+              value:
+                categoryLabel,
+            },
+            {
+              label:
+                'Descrição',
+              value:
+                safeString(
+                  data.description,
+                ),
+            },
+            {
+              label:
+                'Valor',
+              value:
+                safeFormatCurrency(
+                  data.amount,
+                ),
+            },
+          ]
+
+      const notes =
+        safeString(
+          data.notes,
+          '',
+        )
+
+      if (notes) {
+        fields.push({
+          label: 'Notas',
+          value: notes,
+        })
+      }
+
+      return {
+        title:
+          'Registrar transação financeira',
+        moduleLabel:
+          'Financeiro',
+        fields,
+        warning:
+          'Nenhum registro é criado até você confirmar. Você poderá revisar a transação no módulo Financeiro após a confirmação.',
+      }
+    }
+
+    case 'create_inventory_movement': {
+      const data =
+        proposal.data
+
+      const item =
+        getInventoryItemById(
+          data.inventoryItemId,
+        )
+
+      const itemLabel =
+        item
+          ? `${item.code} — ${item.name}`
+          : 'Item não encontrado'
+
+      const unit =
+        item
+          ? item.unit
+          : undefined
+
+      const fields:
+        ActionFieldDescriptor[] =
+          [
+            {
+              label:
+                'Item',
+              value:
+                itemLabel,
+            },
+            {
+              label:
+                'Tipo',
+              value:
+                safeString(
+                  data.type,
+                ),
+            },
+            {
+              label:
+                'Data',
+              value:
+                safeString(
+                  data.movementDate,
+                ),
+            },
+            {
+              label:
+                'Quantidade',
+              value:
+                safeFormatQuantity(
+                  data.quantity,
+                  unit,
+                ),
+            },
+            {
+              label:
+                'Motivo',
+              value:
+                safeString(
+                  data.reason,
+                ),
+            },
+          ]
+
+      const responsible =
+        safeString(
+          data.responsible,
+          '',
+        )
+
+      if (responsible) {
+        fields.push({
+          label:
+            'Responsável',
+          value:
+            responsible,
+        })
+      }
+
+      const notes =
+        safeString(
+          data.notes,
+          '',
+        )
+
+      if (notes) {
+        fields.push({
+          label: 'Notas',
+          value: notes,
+        })
+      }
+
+      return {
+        title:
+          'Registrar movimentação de estoque',
+        moduleLabel:
+          'Estoque',
+        fields,
+        warning:
+          'Nenhum registro é criado até você confirmar. O service oficial do Estoque revalidará o saldo ao executar.',
+      }
+    }
+
+    case 'create_crop_cycle': {
+      const data =
+        proposal.data
+
+      const area =
+        getLandAreaById(
+          data.landAreaId,
+        )
+
+      const areaLabel =
+        area
+          ? `${area.code} — ${area.name}`
+          : 'Área não encontrada'
+
+      const fields:
+        ActionFieldDescriptor[] =
+          [
+            {
+              label:
+                'Talhão',
+              value:
+                areaLabel,
+            },
+            {
+              label:
+                'Cultura',
+              value:
+                safeString(
+                  data.crop,
+                ),
+            },
+          ]
+
+      const cultivar =
+        safeString(
+          data.cultivar,
+          '',
+        )
+
+      if (cultivar) {
+        fields.push({
+          label:
+            'Cultivar',
+          value:
+            cultivar,
+        })
+      }
+
+      fields.push({
+        label:
+          'Safra',
+        value:
+          safeString(
+            data.season,
+          ),
+      })
+
+      fields.push({
+        label:
+          'Situação',
+        value:
+          safeString(
+            data.status,
+          ),
+      })
+
+      const planting =
+        safeString(
+          data.plantingDate,
+          '',
+        )
+
+      if (planting) {
+        fields.push({
+          label:
+            'Plantio',
+          value:
+            planting,
+        })
+      }
+
+      const harvest =
+        safeString(
+          data.expectedHarvestDate,
+          '',
+        )
+
+      if (harvest) {
+        fields.push({
+          label:
+            'Colheita prevista',
+          value:
+            harvest,
+        })
+      }
+
+      const notes =
+        safeString(
+          data.notes,
+          '',
+        )
+
+      if (notes) {
+        fields.push({
+          label:
+            'Notas',
+          value:
+            notes,
+        })
+      }
+
+      return {
+        title:
+          'Criar ciclo de cultivo',
+        moduleLabel:
+          'Cultivos',
+        fields,
+        warning:
+          'Nenhum registro é criado até você confirmar. Você poderá revisar o ciclo no módulo Cultivos após a confirmação.',
+      }
+    }
+
+    case 'update_machine_status': {
+      const data =
+        proposal.data
+
+      const all =
+        getMachines()
+
+      const normalized =
+        data.machineCode
+          .trim()
+          .toLowerCase()
+
+      const machine =
+        all.find(
+          current =>
+            current.code
+              .toLowerCase() ===
+            normalized,
+        ) ?? null
+
+      const machineLabel =
+        machine
+          ? `${machine.code} — ${machine.name}`
+          : `Máquina não encontrada (código ${safeString(data.machineCode)})`
+
+      const currentStatus =
+        machine
+          ? machine.status
+          : '—'
+
+      const fields:
+        ActionFieldDescriptor[] =
+          [
+            {
+              label:
+                'Máquina',
+              value:
+                machineLabel,
+            },
+            {
+              label:
+                'Situação atual',
+              value:
+                currentStatus,
+            },
+            {
+              label:
+                'Nova situação',
+              value:
+                safeString(
+                  data.newStatus,
+                ),
+            },
+          ]
+
+      return {
+        title:
+          'Alterar situação da máquina',
+        moduleLabel:
+          'Máquinas',
+        fields,
+        warning:
+          'Nenhum registro é alterado até você confirmar. Somente o campo de situação será modificado, preservando todos os demais dados da máquina.',
+      }
+    }
+  }
+}
