@@ -1,7 +1,6 @@
 import {
   useState,
   FormEvent,
-  useMemo,
 } from 'react'
 
 import {
@@ -14,24 +13,24 @@ import { Sprout } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
-import { getPrimaryAdminLoginEmail } from '../services/employeeService'
+
+type AuthMode = 'login' | 'register'
 
 export default function Login() {
+  const [mode, setMode] = useState<AuthMode>('login')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(false)
+  const [passwordConfirmation, setPasswordConfirmation] =
+    useState('')
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const { login } = useAuth()
+  const { login, register } = useAuth()
 
   const navigate = useNavigate()
   const location = useLocation()
-
-  const primaryAdminEmail = useMemo(
-    () => getPrimaryAdminLoginEmail(),
-    [],
-  )
 
   const from =
     (
@@ -43,38 +42,96 @@ export default function Login() {
     )?.from?.pathname || '/dashboard'
 
   const handleSubmit = async (
-    e: FormEvent,
+    event: FormEvent,
   ) => {
-    e.preventDefault()
+    event.preventDefault()
 
     setError('')
+    setMessage('')
 
     if (!email || !password) {
-      setError('Preencha todos os campos')
+      setError('Preencha todos os campos obrigatórios.')
       return
+    }
+
+    if (mode === 'register') {
+      if (!name.trim()) {
+        setError('Informe seu nome.')
+        return
+      }
+
+      if (password !== passwordConfirmation) {
+        setError('As senhas não coincidem.')
+        return
+      }
     }
 
     setLoading(true)
 
     try {
-      await login(
+      if (mode === 'login') {
+        const loggedUser = await login(
+          email,
+          password,
+        )
+
+        navigate(
+          loggedUser.propertyId
+            ? from
+            : '/configuracao-inicial',
+          {
+            replace: true,
+          },
+        )
+
+        return
+      }
+
+      const result = await register(
+        name,
         email,
         password,
-        remember,
       )
 
-      navigate(from, {
-        replace: true,
-      })
+      if (result.confirmationRequired) {
+        setMessage(
+          'Conta criada. Verifique seu e-mail para confirmar o cadastro e depois entre no Agro360.',
+        )
+        setMode('login')
+        setPassword('')
+        setPasswordConfirmation('')
+        return
+      }
+
+      if (result.user) {
+        navigate(
+          result.user.propertyId
+            ? '/dashboard'
+            : '/configuracao-inicial',
+          {
+            replace: true,
+          },
+        )
+      }
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message)
       } else {
-        setError('Falha ao entrar.')
+        setError('Falha ao autenticar.')
       }
     } finally {
       setLoading(false)
     }
+  }
+
+  const switchMode = (
+    nextMode: AuthMode,
+  ) => {
+    setMode(nextMode)
+    setError('')
+    setMessage('')
+    setPassword('')
+    setPasswordConfirmation('')
   }
 
   return (
@@ -98,8 +155,40 @@ export default function Login() {
           onSubmit={handleSubmit}
           className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 md:p-8"
         >
+          <div className="grid grid-cols-2 gap-2 mb-6">
+            <button
+              type="button"
+              onClick={() =>
+                switchMode('login')
+              }
+              className={
+                mode === 'login'
+                  ? 'px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium'
+                  : 'px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-medium'
+              }
+            >
+              Entrar
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                switchMode('register')
+              }
+              className={
+                mode === 'register'
+                  ? 'px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium'
+                  : 'px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-medium'
+              }
+            >
+              Criar conta
+            </button>
+          </div>
+
           <h2 className="text-lg font-semibold mb-6">
-            Entrar
+            {mode === 'login'
+              ? 'Entrar'
+              : 'Criar acesso'}
           </h2>
 
           {error && (
@@ -108,13 +197,31 @@ export default function Login() {
             </div>
           )}
 
+          {message && (
+            <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-sm">
+              {message}
+            </div>
+          )}
+
           <div className="space-y-4">
+            {mode === 'register' && (
+              <Input
+                label="Nome"
+                value={name}
+                onChange={event =>
+                  setName(event.target.value)
+                }
+                placeholder="Seu nome"
+                required
+              />
+            )}
+
             <Input
               label="E-mail"
               type="email"
               value={email}
-              onChange={e =>
-                setEmail(e.target.value)
+              onChange={event =>
+                setEmail(event.target.value)
               }
               placeholder="seu@email.com"
               required
@@ -124,26 +231,30 @@ export default function Login() {
               label="Senha"
               type="password"
               value={password}
-              onChange={e =>
-                setPassword(e.target.value)
+              onChange={event =>
+                setPassword(event.target.value)
               }
               placeholder="••••••••"
+              minLength={8}
               required
             />
+
+            {mode === 'register' && (
+              <Input
+                label="Confirmar senha"
+                type="password"
+                value={passwordConfirmation}
+                onChange={event =>
+                  setPasswordConfirmation(
+                    event.target.value,
+                  )
+                }
+                placeholder="••••••••"
+                minLength={8}
+                required
+              />
+            )}
           </div>
-
-          <label className="flex items-center gap-2 mt-4 text-sm text-gray-700 dark:text-gray-300">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={e =>
-                setRemember(e.target.checked)
-              }
-              className="rounded border-gray-300 dark:border-gray-600 text-green-600 focus:ring-green-500"
-            />
-
-            Lembrar minha sessão neste dispositivo
-          </label>
 
           <Button
             type="submit"
@@ -151,19 +262,15 @@ export default function Login() {
             className="w-full mt-6"
           >
             {loading
-              ? 'Entrando...'
-              : 'Entrar'}
+              ? 'Aguarde...'
+              : mode === 'login'
+                ? 'Entrar'
+                : 'Criar conta'}
           </Button>
 
           <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400">
-            Acesso simulado — use o e-mail de uma conta ativa e qualquer senha não vazia.
+            Autenticação protegida pelo Supabase Auth.
           </p>
-
-          {primaryAdminEmail && (
-            <p className="mt-2 text-xs text-center text-gray-500 dark:text-gray-400">
-              Administrador disponível: {primaryAdminEmail}
-            </p>
-          )}
         </form>
       </div>
     </div>
