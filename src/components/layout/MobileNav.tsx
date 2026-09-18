@@ -15,6 +15,7 @@ import {
   Map as MapIcon,
   BrainCircuit,
   X,
+  Settings,
 } from 'lucide-react'
 import { PermissionKey, User } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
@@ -102,6 +103,11 @@ const navItems: NavItem[] = [
     label: 'Funcionários',
     icon: Users,
     adminOnly: true,
+  },
+  {
+    to: '/perfil',
+    label: 'Meu perfil',
+    icon: Settings,
   },
   {
     to: '/propriedade',
