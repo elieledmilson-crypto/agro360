@@ -111,6 +111,7 @@ import ReportsPage from '../pages/reports/ReportsPage'
 import PropertyMapPage from '../pages/map/PropertyMapPage'
 import IntelligencePage from '../pages/intelligence/IntelligencePage'
 import PropertySetupPage from '../pages/PropertySetupPage'
+import ProfilePage from '../pages/ProfilePage'
 
 import { ProtectedRoute } from '../components/common/ProtectedRoute'
 import { PublicOnlyRoute } from '../components/common/PublicOnlyRoute'
@@ -133,6 +134,7 @@ export default function AppRoutes() {
         <Route element={<PropertyReadyRoute />}>
           <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/perfil" element={<ProfilePage />} />
 
           <Route path="/acesso-negado" element={<AccessDeniedPage />} />
 
