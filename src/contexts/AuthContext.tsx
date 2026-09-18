@@ -7,6 +7,7 @@ import {
 } from 'react'
 import { User } from '../types'
 import * as authService from '../services/authService'
+import { supabase } from '../lib/supabase'
 
 interface AuthContextType {
   user: User | null
@@ -40,6 +41,22 @@ export function AuthProvider({
   const refreshUser = useCallback(async () => {
     const currentUser = await authService.getCurrentUser()
     setUser(currentUser)
+  }, [])
+
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!session) {
+          setUser(null)
+        }
+      },
+    )
+
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
