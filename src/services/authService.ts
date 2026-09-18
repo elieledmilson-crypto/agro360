@@ -227,9 +227,14 @@ export async function updateAccountEmail(
     }
   }
 
-  const { data, error } = await supabase.auth.updateUser({
-    email: normalizedEmail,
-  })
+  const { data, error } = await supabase.auth.updateUser(
+    {
+      email: normalizedEmail,
+    },
+    {
+      emailRedirectTo: `${window.location.origin}/perfil`,
+    },
+  )
 
   if (error) {
     throw new Error(
