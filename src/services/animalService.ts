@@ -17,62 +17,7 @@ const EVENTS_KEY = 'agro360_animal_events'
 const INITIALIZED_KEY = 'agro360_animals_initialized'
 
 function getInitialAnimals(): Animal[] {
-  const lots = getLots()
-  const initialLots = lots.length > 0 ? lots : []
-  const now = new Date().toISOString()
-
-  return [
-    {
-      id: generateId(),
-      identification: 'BR-0001',
-      name: 'Estrela',
-      species: 'Bovino',
-      breed: 'Nelore',
-      sex: 'Fêmea',
-      birthDate: '2021-03-15',
-      category: 'Matriz',
-      status: 'Ativo',
-      lotId: initialLots[0]?.id,
-      currentWeight: 480,
-      origin: 'Nascimento na propriedade',
-      notes: 'Boa produtora de leite.',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: generateId(),
-      identification: 'BR-0002',
-      name: 'Trovão',
-      species: 'Bovino',
-      breed: 'Angus',
-      sex: 'Macho',
-      birthDate: '2020-08-20',
-      category: 'Touro',
-      status: 'Ativo',
-      lotId: initialLots[0]?.id,
-      currentWeight: 750,
-      origin: 'Compra',
-      notes: 'Reprodutor principal.',
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: generateId(),
-      identification: 'BR-0003',
-      name: 'Lua',
-      species: 'Bovino',
-      breed: 'Nelore',
-      sex: 'Fêmea',
-      birthDate: '2022-01-10',
-      category: 'Novilha',
-      status: 'Ativo',
-      lotId: initialLots[1]?.id,
-      currentWeight: 320,
-      origin: 'Nascimento na propriedade',
-      createdAt: now,
-      updatedAt: now,
-    },
-  ]
+  return []
 }
 
 function initializeAnimalsIfNeeded(): void {
