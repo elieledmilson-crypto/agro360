@@ -19,6 +19,7 @@ export interface User {
   name: string
   email: string
   role: UserRole
+  propertyId?: string
   employeeId?: string
   permissions?: PermissionKey[]
 }
