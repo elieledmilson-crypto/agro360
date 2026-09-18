@@ -155,6 +155,118 @@ export async function getCurrentUser(): Promise<User | null> {
   return buildCurrentUser()
 }
 
+
+export interface EmailUpdateResult {
+  email: string
+  confirmationRequired: boolean
+}
+
+export async function updateProfileName(
+  name: string,
+): Promise<void> {
+  const normalizedName = name.trim()
+
+  if (!normalizedName) {
+    throw new Error('Nome é obrigatório.')
+  }
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  if (userError || !user) {
+    throw new Error('Não foi possível identificar o usuário atual.')
+  }
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      name: normalizedName,
+    })
+    .eq('id', user.id)
+
+  if (error) {
+    throw new Error(
+      error.message || 'Não foi possível atualizar seu nome.',
+    )
+  }
+
+  void supabase.auth.updateUser({
+    data: {
+      name: normalizedName,
+    },
+  })
+}
+
+export async function updateAccountEmail(
+  email: string,
+): Promise<EmailUpdateResult> {
+  const normalizedEmail = email.trim().toLowerCase()
+
+  if (!normalizedEmail) {
+    throw new Error('E-mail é obrigatório.')
+  }
+
+  const {
+    data: { user: currentUser },
+    error: currentUserError,
+  } = await supabase.auth.getUser()
+
+  if (currentUserError || !currentUser) {
+    throw new Error('Não foi possível identificar o usuário atual.')
+  }
+
+  if (
+    currentUser.email?.trim().toLowerCase() ===
+    normalizedEmail
+  ) {
+    return {
+      email: currentUser.email ?? normalizedEmail,
+      confirmationRequired: false,
+    }
+  }
+
+  const { data, error } = await supabase.auth.updateUser({
+    email: normalizedEmail,
+  })
+
+  if (error) {
+    throw new Error(
+      error.message || 'Não foi possível atualizar seu e-mail.',
+    )
+  }
+
+  const effectiveEmail =
+    data.user.email?.trim().toLowerCase() ?? ''
+
+  return {
+    email: data.user.email ?? currentUser.email ?? normalizedEmail,
+    confirmationRequired:
+      effectiveEmail !== normalizedEmail,
+  }
+}
+
+export async function updateAccountPassword(
+  password: string,
+): Promise<void> {
+  if (password.length < 8) {
+    throw new Error(
+      'A senha deve ter pelo menos 8 caracteres.',
+    )
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password,
+  })
+
+  if (error) {
+    throw new Error(
+      error.message || 'Não foi possível atualizar sua senha.',
+    )
+  }
+}
+
 export async function logout(): Promise<void> {
   const { error } = await supabase.auth.signOut()
 
