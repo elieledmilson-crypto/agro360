@@ -170,7 +170,22 @@ function tryParseJson(text) {
     return null
   }
 
-  const trimmed = text.trim()
+  let trimmed = text.trim()
+
+  if (
+    trimmed.startsWith('```')
+  ) {
+    trimmed = trimmed
+      .replace(
+        /^```(?:json)?\s*/i,
+        '',
+      )
+      .replace(
+        /\s*```$/,
+        '',
+      )
+      .trim()
+  }
 
   if (!trimmed.startsWith('{')) {
     return null
@@ -295,15 +310,26 @@ export async function generateAnswer(
     '\n\nPERGUNTA DO USUÁRIO:\n' +
     message
 
+  const historyBlock =
+    history.length > 0
+      ? 'HISTÓRICO DA CONVERSA (apenas para referência):\n' +
+        history
+          .map(
+            item =>
+              `${item.role === 'assistant' ? 'ASSISTENTE' : 'USUÁRIO'}: ${item.content}`,
+          )
+          .join('\n') +
+        '\n\n'
+      : ''
+
   const contents = [
-    ...buildGeminiHistory(
-      history,
-    ),
     {
       role: 'user',
       parts: [
         {
-          text: contextBlock,
+          text:
+            historyBlock +
+            contextBlock,
         },
       ],
     },
@@ -321,11 +347,6 @@ export async function generateAnswer(
       },
 
       contents,
-
-      generationConfig: {
-        responseMimeType:
-          'application/json',
-      },
     })
 
   const fallbackModel =
@@ -488,6 +509,10 @@ export async function generateAnswer(
         extractGeminiText(data)
 
       if (!raw) {
+        console.error(
+          `[ai-server] Gemini empty response model=${currentModel} attempt=${attempt} ${JSON.stringify(data).slice(0, 500)}`,
+        )
+
         lastError =
           'AI_PROVIDER_ERROR: resposta vazia do provedor.'
 
