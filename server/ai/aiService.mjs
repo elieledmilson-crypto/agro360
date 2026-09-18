@@ -170,7 +170,22 @@ function tryParseJson(text) {
     return null
   }
 
-  const trimmed = text.trim()
+  let trimmed = text.trim()
+
+  if (
+    trimmed.startsWith('```')
+  ) {
+    trimmed = trimmed
+      .replace(
+        /^```(?:json)?\s*/i,
+        '',
+      )
+      .replace(
+        /\s*```$/,
+        '',
+      )
+      .trim()
+  }
 
   if (!trimmed.startsWith('{')) {
     return null
@@ -295,112 +310,222 @@ export async function generateAnswer(
     '\n\nPERGUNTA DO USUÁRIO:\n' +
     message
 
+  const historyBlock =
+    history.length > 0
+      ? 'HISTÓRICO DA CONVERSA (apenas para referência):\n' +
+        history
+          .map(
+            item =>
+              `${item.role === 'assistant' ? 'ASSISTENTE' : 'USUÁRIO'}: ${item.content}`,
+          )
+          .join('\n') +
+        '\n\n'
+      : ''
+
   const contents = [
-    ...buildGeminiHistory(
-      history,
-    ),
     {
       role: 'user',
       parts: [
         {
-          text: contextBlock,
+          text:
+            historyBlock +
+            contextBlock,
         },
       ],
     },
   ]
 
-  const controller =
-    new AbortController()
-
-  const timeout =
-    setTimeout(
-      () => {
-        controller.abort()
-      },
-      REQUEST_TIMEOUT_MS,
-    )
-
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/` +
-    `${encodeURIComponent(model)}:generateContent` +
-    `?key=${encodeURIComponent(apiKey)}`
-
-  let response
-
-  try {
-    response = await fetch(
-      url,
-      {
-        method: 'POST',
-
-        headers: {
-          'Content-Type':
-            'application/json',
-        },
-
-        signal:
-          controller.signal,
-
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text:
-                  SYSTEM_PROMPT,
-              },
-            ],
+  const requestBody =
+    JSON.stringify({
+      systemInstruction: {
+        parts: [
+          {
+            text:
+              SYSTEM_PROMPT,
           },
-
-          contents,
-
-          generationConfig: {
-            responseMimeType:
-              'application/json',
-          },
-        }),
+        ],
       },
-    )
-  } catch (error) {
-    if (
-      isTimeoutError(error)
+
+      contents,
+    })
+
+  const fallbackModel =
+    'gemini-3.5-flash'
+
+  const modelsToTry =
+    [model, fallbackModel]
+      .filter(
+        (value, index, list) =>
+          list.indexOf(value) === index,
+      )
+
+  let lastError =
+    'AI_PROVIDER_ERROR'
+
+  for (
+    const currentModel of
+    modelsToTry
+  ) {
+    for (
+      let attempt = 1;
+      attempt <= 3;
+      attempt += 1
     ) {
-      throw new Error(
-        'AI_TIMEOUT',
+      const controller =
+        new AbortController()
+
+      const timeout =
+        setTimeout(
+          () => {
+            controller.abort()
+          },
+          REQUEST_TIMEOUT_MS,
+        )
+
+      const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/` +
+        `${encodeURIComponent(currentModel)}:generateContent` +
+        `?key=${encodeURIComponent(apiKey)}`
+
+      let response
+
+      try {
+        response = await fetch(
+          url,
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+
+            signal:
+              controller.signal,
+
+            body:
+              requestBody,
+          },
+        )
+      } catch (error) {
+        clearTimeout(timeout)
+
+        if (
+          isTimeoutError(error)
+        ) {
+          lastError =
+            'AI_TIMEOUT'
+
+          if (attempt < 3) {
+            await new Promise(
+              resolve =>
+                setTimeout(
+                  resolve,
+                  attempt * 700,
+                ),
+            )
+
+            continue
+          }
+
+          break
+        }
+
+        lastError =
+          'AI_PROVIDER_ERROR'
+
+        if (attempt < 3) {
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                attempt * 700,
+              ),
+          )
+
+          continue
+        }
+
+        break
+      } finally {
+        clearTimeout(timeout)
+      }
+
+      if (!response.ok) {
+        let details = ''
+
+        try {
+          details =
+            await response.text()
+        } catch {
+          details = ''
+        }
+
+        console.error(
+          `[ai-server] Gemini HTTP ${response.status} model=${currentModel} attempt=${attempt} ${details.slice(0, 300)}`,
+        )
+
+        lastError =
+          `AI_PROVIDER_ERROR: Gemini respondeu HTTP ${response.status}.`
+
+        const retryable =
+          response.status === 429 ||
+          response.status === 500 ||
+          response.status === 502 ||
+          response.status === 503 ||
+          response.status === 504
+
+        if (
+          retryable &&
+          attempt < 3
+        ) {
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                attempt * 700,
+              ),
+          )
+
+          continue
+        }
+
+        break
+      }
+
+      let data
+
+      try {
+        data =
+          await response.json()
+      } catch {
+        lastError =
+          'AI_PROVIDER_ERROR: resposta inválida do Gemini.'
+
+        continue
+      }
+
+      const raw =
+        extractGeminiText(data)
+
+      if (!raw) {
+        console.error(
+          `[ai-server] Gemini empty response model=${currentModel} attempt=${attempt} ${JSON.stringify(data).slice(0, 500)}`,
+        )
+
+        lastError =
+          'AI_PROVIDER_ERROR: resposta vazia do provedor.'
+
+        continue
+      }
+
+      return normalizeResponse(
+        raw,
       )
     }
-
-    throw error
-  } finally {
-    clearTimeout(timeout)
   }
 
-  if (!response.ok) {
-    throw new Error(
-      `AI_PROVIDER_ERROR: Gemini respondeu HTTP ${response.status}.`,
-    )
-  }
-
-  let data
-
-  try {
-    data =
-      await response.json()
-  } catch {
-    throw new Error(
-      'AI_PROVIDER_ERROR: resposta inválida do Gemini.',
-    )
-  }
-
-  const raw =
-    extractGeminiText(data)
-
-  if (!raw) {
-    throw new Error(
-      'AI_PROVIDER_ERROR: resposta vazia do provedor.',
-    )
-  }
-
-  return normalizeResponse(
-    raw,
+  throw new Error(
+    lastError,
   )
 }

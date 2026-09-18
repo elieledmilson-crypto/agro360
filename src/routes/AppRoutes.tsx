@@ -110,10 +110,13 @@ import AlertsPage from '../pages/alerts/AlertsPage'
 import ReportsPage from '../pages/reports/ReportsPage'
 import PropertyMapPage from '../pages/map/PropertyMapPage'
 import IntelligencePage from '../pages/intelligence/IntelligencePage'
+import PropertySetupPage from '../pages/PropertySetupPage'
+import ProfilePage from '../pages/ProfilePage'
 
 import { ProtectedRoute } from '../components/common/ProtectedRoute'
 import { PublicOnlyRoute } from '../components/common/PublicOnlyRoute'
 import { PermissionRoute } from '../components/common/PermissionRoute'
+import { PropertyReadyRoute } from '../components/common/PropertyReadyRoute'
 
 export default function AppRoutes() {
   return (
@@ -123,8 +126,15 @@ export default function AppRoutes() {
       </Route>
 
       <Route element={<ProtectedRoute />}>
-        <Route element={<AppLayout />}>
+        <Route
+          path="/configuracao-inicial"
+          element={<PropertySetupPage />}
+        />
+
+        <Route element={<PropertyReadyRoute />}>
+          <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/perfil" element={<ProfilePage />} />
 
           <Route path="/acesso-negado" element={<AccessDeniedPage />} />
 
@@ -472,6 +482,7 @@ export default function AppRoutes() {
             />
           </Route>
         </Route>
+      </Route>
       </Route>
 
       <Route
