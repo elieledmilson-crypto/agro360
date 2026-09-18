@@ -15,7 +15,6 @@ const EMPLOYEES_INITIALIZED_KEY = 'agro360_employees_initialized'
 const ACCOUNTS_KEY = 'agro360_access_accounts'
 const ACCOUNTS_INITIALIZED_KEY = 'agro360_access_accounts_initialized'
 
-const LEGACY_USER_KEY = 'agro360_user'
 
 const VALID_ROLES: UserRole[] = ['admin', 'user']
 const VALID_EMPLOYEE_STATUSES: EmployeeStatus[] = ['Ativo', 'Inativo']
@@ -86,33 +85,6 @@ function isAccessAccount(value: unknown): value is AccessAccount {
 
 // -------------------- Inicialização --------------------
 
-function readLegacyUser(): { name: string; email: string } | null {
-  const storages: Storage[] = [localStorage, sessionStorage]
-
-  for (const storage of storages) {
-    const raw = storage.getItem(LEGACY_USER_KEY)
-    if (!raw) continue
-
-    try {
-      const parsed = JSON.parse(raw) as unknown
-
-      if (!parsed || typeof parsed !== 'object') continue
-
-      const obj = parsed as Record<string, unknown>
-
-      if (obj.role !== 'admin') continue
-      if (!isNonEmptyString(obj.name)) continue
-      if (!isNonEmptyString(obj.email)) continue
-
-      return { name: obj.name, email: obj.email }
-    } catch {
-      // ignora conteúdo inválido
-    }
-  }
-
-  return null
-}
-
 function initializeEmployeesIfNeeded(): void {
   const initialized = getStorageItem<boolean>(
     EMPLOYEES_INITIALIZED_KEY,
@@ -121,35 +93,8 @@ function initializeEmployeesIfNeeded(): void {
 
   if (initialized) return
 
-  const legacy = readLegacyUser()
-
-  const now = new Date().toISOString()
-
-  const adminEmployee: Employee = {
-    id: generateId(),
-    name: legacy?.name ?? 'João da Silva',
-    function: 'Administrador',
-    email: legacy?.email ?? 'admin@agro360.com',
-    status: 'Ativo',
-    createdAt: now,
-    updatedAt: now,
-  }
-
-  const adminAccount: AccessAccount = {
-    id: generateId(),
-    employeeId: adminEmployee.id,
-    email: normalizeAccessEmail(
-      legacy?.email ?? 'admin@agro360.com',
-    ),
-    role: 'admin',
-    permissions: [],
-    status: 'Ativo',
-    createdAt: now,
-    updatedAt: now,
-  }
-
-  setStorageItem(EMPLOYEES_KEY, [adminEmployee])
-  setStorageItem(ACCOUNTS_KEY, [adminAccount])
+  setStorageItem(EMPLOYEES_KEY, [])
+  setStorageItem(ACCOUNTS_KEY, [])
   setStorageItem(EMPLOYEES_INITIALIZED_KEY, true)
   setStorageItem(ACCOUNTS_INITIALIZED_KEY, true)
 }
