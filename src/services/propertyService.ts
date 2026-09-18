@@ -8,6 +8,17 @@ export interface CreatePropertyInput {
   owner: string
 }
 
+function getPropertyErrorMessage(
+  code: string | undefined,
+  fallback: string,
+): string {
+  if (code === '42501') {
+    return 'Sua conta não possui permissão para realizar esta operação.'
+  }
+
+  return fallback
+}
+
 export async function createPropertyForCurrentUser(
   input: CreatePropertyInput,
 ): Promise<string> {
@@ -39,7 +50,10 @@ export async function createPropertyForCurrentUser(
 
   if (error) {
     throw new Error(
-      error.message || 'Não foi possível criar a propriedade.',
+      getPropertyErrorMessage(
+        error.code,
+        'Não foi possível criar a propriedade. Tente novamente.',
+      ),
     )
   }
 
@@ -61,7 +75,10 @@ export async function getPropertyById(
 
   if (error) {
     throw new Error(
-      error.message || 'Não foi possível carregar a propriedade.',
+      getPropertyErrorMessage(
+        error.code,
+        'Não foi possível carregar a propriedade.',
+      ),
     )
   }
 
