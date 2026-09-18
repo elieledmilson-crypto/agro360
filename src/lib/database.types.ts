@@ -1388,6 +1388,41 @@ export type Database = {
           },
         ]
       }
+      property_state: {
+        Row: {
+          created_at: string
+          module_key: string
+          payload: Json
+          property_id: string
+          state_key: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          module_key: string
+          payload: Json
+          property_id: string
+          state_key: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          module_key?: string
+          payload?: Json
+          property_id?: string
+          state_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "property_state_property_id_fkey"
+            columns: ["property_id"]
+            isOneToOne: false
+            referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rural_structure_land_areas: {
         Row: {
           land_area_id: string
