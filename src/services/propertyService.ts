@@ -1,11 +1,44 @@
 import type { Farm } from '../types'
 import { supabase } from '../lib/supabase'
 
-export interface CreatePropertyInput {
+export interface PropertyInput {
   name: string
   location: string
   totalArea: number
   owner: string
+}
+
+export type CreatePropertyInput = PropertyInput
+export type UpdatePropertyInput = PropertyInput
+
+function normalizePropertyInput(
+  input: PropertyInput,
+): PropertyInput {
+  const name = input.name.trim()
+  const location = input.location.trim()
+  const owner = input.owner.trim()
+
+  if (!name) {
+    throw new Error('Nome da propriedade é obrigatório.')
+  }
+
+  if (!owner) {
+    throw new Error('Nome do proprietário é obrigatório.')
+  }
+
+  if (
+    !Number.isFinite(input.totalArea) ||
+    input.totalArea < 0
+  ) {
+    throw new Error('Área total inválida.')
+  }
+
+  return {
+    name,
+    location,
+    owner,
+    totalArea: input.totalArea,
+  }
 }
 
 function getPropertyErrorMessage(
@@ -19,32 +52,34 @@ function getPropertyErrorMessage(
   return fallback
 }
 
+function mapProperty(data: {
+  id: string
+  name: string
+  location: string
+  total_area: number | string
+  owner_name: string
+}): Farm {
+  return {
+    id: data.id,
+    name: data.name,
+    location: data.location,
+    totalArea: Number(data.total_area),
+    owner: data.owner_name,
+  }
+}
+
 export async function createPropertyForCurrentUser(
   input: CreatePropertyInput,
 ): Promise<string> {
-  const name = input.name.trim()
-  const location = input.location.trim()
-  const owner = input.owner.trim()
-
-  if (!name) {
-    throw new Error('Nome da propriedade é obrigatório.')
-  }
-
-  if (!owner) {
-    throw new Error('Nome do proprietário é obrigatório.')
-  }
-
-  if (!Number.isFinite(input.totalArea) || input.totalArea < 0) {
-    throw new Error('Área total inválida.')
-  }
+  const normalized = normalizePropertyInput(input)
 
   const { data, error } = await supabase.rpc(
     'create_property_for_current_user',
     {
-      p_name: name,
-      p_location: location,
-      p_total_area: input.totalArea,
-      p_owner_name: owner,
+      p_name: normalized.name,
+      p_location: normalized.location,
+      p_total_area: normalized.totalArea,
+      p_owner_name: normalized.owner,
     },
   )
 
@@ -58,7 +93,9 @@ export async function createPropertyForCurrentUser(
   }
 
   if (!data) {
-    throw new Error('A propriedade não retornou um identificador válido.')
+    throw new Error(
+      'A propriedade não retornou um identificador válido.',
+    )
   }
 
   return data
@@ -86,11 +123,35 @@ export async function getPropertyById(
     return undefined
   }
 
-  return {
-    id: data.id,
-    name: data.name,
-    location: data.location,
-    totalArea: Number(data.total_area),
-    owner: data.owner_name,
+  return mapProperty(data)
+}
+
+export async function updateProperty(
+  propertyId: string,
+  input: UpdatePropertyInput,
+): Promise<Farm> {
+  const normalized = normalizePropertyInput(input)
+
+  const { data, error } = await supabase
+    .from('properties')
+    .update({
+      name: normalized.name,
+      location: normalized.location,
+      total_area: normalized.totalArea,
+      owner_name: normalized.owner,
+    })
+    .eq('id', propertyId)
+    .select('id, name, location, total_area, owner_name')
+    .single()
+
+  if (error) {
+    throw new Error(
+      getPropertyErrorMessage(
+        error.code,
+        'Não foi possível atualizar a propriedade.',
+      ),
+    )
   }
+
+  return mapProperty(data)
 }
