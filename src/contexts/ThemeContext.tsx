@@ -14,32 +14,22 @@ export const ThemeContext = createContext<ThemeContextType>(
   {} as ThemeContextType,
 )
 
-const STORAGE_KEY = 'agro360_theme'
-
 export function ThemeProvider({
   children,
 }: {
   children: ReactNode
 }) {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-
-    if (stored === 'dark' || stored === 'light') {
-      return stored
-    }
-
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+  const [theme, setTheme] = useState<'light' | 'dark'>(() =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'
-      : 'light'
-  })
+      : 'light',
+  )
 
   useEffect(() => {
     document.documentElement.classList.toggle(
       'dark',
       theme === 'dark',
     )
-
-    localStorage.setItem(STORAGE_KEY, theme)
   }, [theme])
 
   const toggleTheme = () => {
