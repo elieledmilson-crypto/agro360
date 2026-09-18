@@ -1,28 +1,56 @@
 import {
+  FormEvent,
   useEffect,
   useState,
 } from 'react'
 import { Link } from 'react-router-dom'
 import Card from '../components/ui/Card'
 import HelpTip from '../components/ui/HelpTip'
+import Input from '../components/ui/Input'
+import Button from '../components/ui/Button'
 import {
   MapPin,
   User,
   Ruler,
   Map as MapIcon,
+  Pencil,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { userHasPermission } from '../services/permissionService'
-import { getPropertyById } from '../services/propertyService'
+import {
+  getPropertyById,
+  updateProperty,
+} from '../services/propertyService'
 import type { Farm } from '../types'
+
+interface PropertyFormState {
+  name: string
+  location: string
+  totalArea: string
+  owner: string
+}
+
+function toFormState(farm: Farm): PropertyFormState {
+  return {
+    name: farm.name,
+    location: farm.location,
+    totalArea: String(farm.totalArea),
+    owner: farm.owner,
+  }
+}
 
 export default function Property() {
   const { user } = useAuth()
   const canSeeMap = userHasPermission(user, 'map')
+  const canEdit = user?.role === 'admin'
 
   const [farm, setFarm] = useState<Farm | null>(null)
+  const [form, setForm] = useState<PropertyFormState | null>(null)
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   useEffect(() => {
     let active = true
@@ -33,7 +61,6 @@ export default function Property() {
           setFarm(null)
           setLoading(false)
         }
-
         return
       }
 
@@ -42,6 +69,7 @@ export default function Property() {
 
         if (active) {
           setFarm(data ?? null)
+          setForm(data ? toFormState(data) : null)
           setError(
             data
               ? ''
@@ -70,23 +98,87 @@ export default function Property() {
     }
   }, [user?.propertyId])
 
+  const handleSubmit = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault()
+
+    if (!farm || !form || !canEdit) {
+      return
+    }
+
+    const totalArea = Number(form.totalArea.replace(',', '.'))
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const updated = await updateProperty(farm.id, {
+        name: form.name,
+        location: form.location,
+        totalArea,
+        owner: form.owner,
+      })
+
+      setFarm(updated)
+      setForm(toFormState(updated))
+      setEditing(false)
+      setSuccess('Informações da propriedade atualizadas com sucesso.')
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível atualizar a propriedade.',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cancelEdit = () => {
+    if (farm) {
+      setForm(toFormState(farm))
+    }
+
+    setEditing(false)
+    setError('')
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold">
-            Propriedade
-          </h1>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold">
+              Propriedade
+            </h1>
 
-          <HelpTip
-            title="Para que serve esta página?"
-            description="Aqui ficam as informações gerais da propriedade rural utilizada no Agro360."
-          />
+            <HelpTip
+              title="Para que serve esta página?"
+              description="Aqui ficam as informações gerais da propriedade rural utilizada no Agro360."
+            />
+          </div>
+
+          <p className="text-gray-600 dark:text-gray-400">
+            Informações da sua fazenda
+          </p>
         </div>
 
-        <p className="text-gray-600 dark:text-gray-400">
-          Informações da sua fazenda
-        </p>
+        {!loading && farm && canEdit && !editing && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setEditing(true)
+              setSuccess('')
+            }}
+            className="inline-flex items-center gap-2"
+          >
+            <Pencil className="w-4 h-4" />
+            Editar propriedade
+          </Button>
+        )}
       </div>
 
       {loading && (
@@ -97,7 +189,7 @@ export default function Property() {
         </Card>
       )}
 
-      {!loading && error && (
+      {!loading && error && !editing && (
         <Card className="p-6">
           <p className="text-sm text-red-600 dark:text-red-300">
             {error}
@@ -105,7 +197,127 @@ export default function Property() {
         </Card>
       )}
 
-      {!loading && farm && (
+      {success && (
+        <Card className="p-4">
+          <p className="text-sm text-green-700 dark:text-green-300">
+            {success}
+          </p>
+        </Card>
+      )}
+
+      {!loading && farm && editing && form && (
+        <Card className="p-6">
+          <form
+            onSubmit={handleSubmit}
+            className="space-y-4"
+          >
+            <div>
+              <h2 className="text-lg font-semibold">
+                Editar propriedade
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Apenas administradores podem alterar estas informações.
+              </p>
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-600 dark:text-red-300">
+                {error}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Nome da propriedade"
+                value={form.name}
+                onChange={event =>
+                  setForm(current =>
+                    current
+                      ? {
+                          ...current,
+                          name: event.target.value,
+                        }
+                      : current,
+                  )
+                }
+                required
+              />
+
+              <Input
+                label="Localização"
+                value={form.location}
+                onChange={event =>
+                  setForm(current =>
+                    current
+                      ? {
+                          ...current,
+                          location: event.target.value,
+                        }
+                      : current,
+                  )
+                }
+              />
+
+              <Input
+                label="Área total (ha)"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.totalArea}
+                onChange={event =>
+                  setForm(current =>
+                    current
+                      ? {
+                          ...current,
+                          totalArea: event.target.value,
+                        }
+                      : current,
+                  )
+                }
+                required
+              />
+
+              <Input
+                label="Proprietário"
+                value={form.owner}
+                onChange={event =>
+                  setForm(current =>
+                    current
+                      ? {
+                          ...current,
+                          owner: event.target.value,
+                        }
+                      : current,
+                  )
+                }
+                required
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="submit"
+                disabled={saving}
+              >
+                {saving
+                  ? 'Salvando...'
+                  : 'Salvar alterações'}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelEdit}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {!loading && farm && !editing && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="p-6">
