@@ -8,6 +8,11 @@ import {
   PropertyMapLocation,
   SchematicShapeType,
 } from '../types'
+import {
+  getStorageItem,
+  setStorageItem,
+  removeStorageItem,
+} from './storage'
 
 const LOCATION_KEY = 'agro360:propertyMap:location'
 const LAYOUT_KEY = 'agro360:propertyMap:layouts'
@@ -27,23 +32,16 @@ const EARTH_RADIUS_M = 6371008.8
 // -------------------- Localização da propriedade --------------------
 
 export function getPropertyMapLocation(): PropertyMapLocation | null {
-  try {
-    const raw = localStorage.getItem(LOCATION_KEY)
+  const parsed = getStorageItem<unknown>(
+    LOCATION_KEY,
+    null,
+  )
 
-    if (!raw) {
-      return null
-    }
-
-    const parsed: unknown = JSON.parse(raw)
-
-    if (!isValidLocation(parsed)) {
-      return null
-    }
-
-    return parsed
-  } catch {
+  if (!isValidLocation(parsed)) {
     return null
   }
+
+  return parsed
 }
 
 export function savePropertyMapLocation(
@@ -53,14 +51,11 @@ export function savePropertyMapLocation(
     throw new Error('Localização inválida.')
   }
 
-  localStorage.setItem(
-    LOCATION_KEY,
-    JSON.stringify(location),
-  )
+  setStorageItem(LOCATION_KEY, location)
 }
 
 export function clearPropertyMapLocation(): void {
-  localStorage.removeItem(LOCATION_KEY)
+  removeStorageItem(LOCATION_KEY)
 }
 
 export function isValidLatitude(
@@ -340,27 +335,20 @@ function normalizeLayout(
 }
 
 export function getLandAreaMapLayouts(): LandAreaMapLayout[] {
-  try {
-    const raw = localStorage.getItem(LAYOUT_KEY)
+  const parsed = getStorageItem<unknown>(
+    LAYOUT_KEY,
+    [],
+  )
 
-    if (!raw) {
-      return []
-    }
-
-    const parsed: unknown = JSON.parse(raw)
-
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-
-    return parsed
-      .filter(isValidLayout)
-      .map(layout =>
-        normalizeLayout(layout),
-      )
-  } catch {
+  if (!Array.isArray(parsed)) {
     return []
   }
+
+  return parsed
+    .filter(isValidLayout)
+    .map(layout =>
+      normalizeLayout(layout),
+    )
 }
 
 export function saveLandAreaMapLayouts(
@@ -374,10 +362,7 @@ export function saveLandAreaMapLayouts(
       ),
     )
 
-  localStorage.setItem(
-    LAYOUT_KEY,
-    JSON.stringify(valid),
-  )
+  setStorageItem(LAYOUT_KEY, valid)
 }
 
 function isValidLayout(
@@ -835,54 +820,34 @@ function isValidGeoPolygon(
 export function getPropertyGeographicBoundary():
   | PropertyGeographicBoundary
   | null {
-  try {
-    const raw =
-      localStorage.getItem(
-        GEO_PROPERTY_KEY,
-      )
+  const parsed = getStorageItem<unknown>(
+    GEO_PROPERTY_KEY,
+    null,
+  )
 
-    if (!raw) {
-      return null
-    }
-
-    const parsed: unknown =
-      JSON.parse(raw)
-
-    if (
-      !parsed ||
-      typeof parsed !== 'object'
-    ) {
-      return null
-    }
-
-    const v =
-      parsed as Record<
-        string,
-        unknown
-      >
-
-    if (
-      !isValidGeoPolygon(
-        v.points,
-      )
-    ) {
-      return null
-    }
-
-    if (
-      typeof v.updatedAt !==
-      'string'
-    ) {
-      return null
-    }
-
-    return {
-      points: v.points,
-      updatedAt:
-        v.updatedAt,
-    }
-  } catch {
+  if (
+    !parsed ||
+    typeof parsed !== 'object'
+  ) {
     return null
+  }
+
+  const v = parsed as Record<
+    string,
+    unknown
+  >
+
+  if (!isValidGeoPolygon(v.points)) {
+    return null
+  }
+
+  if (typeof v.updatedAt !== 'string') {
+    return null
+  }
+
+  return {
+    points: v.points,
+    updatedAt: v.updatedAt,
   }
 }
 
@@ -900,74 +865,57 @@ export function savePropertyGeographicBoundary(
     )
   }
 
-  localStorage.setItem(
+  setStorageItem(
     GEO_PROPERTY_KEY,
-    JSON.stringify(
-      boundary,
-    ),
+    boundary,
   )
 }
 
 export function clearPropertyGeographicBoundary(): void {
-  localStorage.removeItem(
-    GEO_PROPERTY_KEY,
-  )
+  removeStorageItem(GEO_PROPERTY_KEY)
 }
 
 export function getLandAreaGeographicBoundaries():
   LandAreaGeographicBoundary[] {
-  try {
-    const raw =
-      localStorage.getItem(
-        GEO_LANDAREAS_KEY,
-      )
+  const parsed = getStorageItem<unknown>(
+    GEO_LANDAREAS_KEY,
+    [],
+  )
 
-    if (!raw) {
-      return []
-    }
-
-    const parsed: unknown =
-      JSON.parse(raw)
-
-    if (
-      !Array.isArray(parsed)
-    ) {
-      return []
-    }
-
-    return parsed.filter(
-      (
-        item,
-      ): item is LandAreaGeographicBoundary => {
-        if (
-          !item ||
-          typeof item !==
-            'object'
-        ) {
-          return false
-        }
-
-        const v =
-          item as Record<
-            string,
-            unknown
-          >
-
-        return (
-          typeof v.landAreaId ===
-            'string' &&
-          v.landAreaId.length > 0 &&
-          isValidGeoPolygon(
-            v.points,
-          ) &&
-          typeof v.updatedAt ===
-            'string'
-        )
-      },
-    )
-  } catch {
+  if (!Array.isArray(parsed)) {
     return []
   }
+
+  return parsed.filter(
+    (
+      item,
+    ): item is LandAreaGeographicBoundary => {
+      if (
+        !item ||
+        typeof item !==
+          'object'
+      ) {
+        return false
+      }
+
+      const v =
+        item as Record<
+          string,
+          unknown
+        >
+
+      return (
+        typeof v.landAreaId ===
+          'string' &&
+        v.landAreaId.length > 0 &&
+        isValidGeoPolygon(
+          v.points,
+        ) &&
+        typeof v.updatedAt ===
+          'string'
+      )
+    },
+  )
 }
 
 export function getLandAreaGeographicBoundary(
@@ -1005,9 +953,9 @@ export function saveLandAreaGeographicBoundary(
 
   all.push(boundary)
 
-  localStorage.setItem(
+  setStorageItem(
     GEO_LANDAREAS_KEY,
-    JSON.stringify(all),
+    all,
   )
 }
 
@@ -1022,13 +970,13 @@ export function deleteLandAreaGeographicBoundary(
     )
 
   if (all.length === 0) {
-    localStorage.removeItem(
+    removeStorageItem(
       GEO_LANDAREAS_KEY,
     )
   } else {
-    localStorage.setItem(
+    setStorageItem(
       GEO_LANDAREAS_KEY,
-      JSON.stringify(all),
+      all,
     )
   }
 }
