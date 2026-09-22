@@ -21,6 +21,7 @@ import HelpTip from '../ui/HelpTip'
 
 export interface EmployeeAccountPayload {
   email: string
+  password?: string
   role: UserRole
   status: AccessAccountStatus
   permissions: PermissionKey[]
@@ -36,6 +37,8 @@ interface EmployeeFormData {
 
   createAccount: boolean
   accountEmail: string
+  accountPassword: string
+  accountPasswordConfirm: string
   accountRole: UserRole
   accountStatus: AccessAccountStatus
 }
@@ -81,6 +84,8 @@ export default function EmployeeForm({
 
         createAccount: hasAccount,
         accountEmail: account?.email ?? '',
+        accountPassword: '',
+        accountPasswordConfirm: '',
         accountRole: account?.role ?? 'user',
         accountStatus: account?.status ?? 'Ativo',
       }
@@ -96,6 +101,8 @@ export default function EmployeeForm({
 
       createAccount: false,
       accountEmail: '',
+      accountPassword: '',
+      accountPasswordConfirm: '',
       accountRole: 'user',
       accountStatus: 'Ativo',
     }
@@ -176,6 +183,26 @@ export default function EmployeeForm({
         newErrors.accountEmail = 'E-mail de acesso é obrigatório'
       }
 
+      const creatingAccess = !hasAccount && formData.createAccount
+      const changingPassword =
+        formData.accountPassword.length > 0 ||
+        formData.accountPasswordConfirm.length > 0
+
+      if (creatingAccess || changingPassword) {
+        if (formData.accountPassword.length < 8) {
+          newErrors.accountPassword =
+            'A senha deve ter pelo menos 8 caracteres'
+        }
+
+        if (
+          formData.accountPassword !==
+          formData.accountPasswordConfirm
+        ) {
+          newErrors.accountPasswordConfirm =
+            'As senhas não coincidem'
+        }
+      }
+
       if (!formData.accountRole) {
         newErrors.accountRole = 'Perfil é obrigatório'
       }
@@ -212,6 +239,7 @@ export default function EmployeeForm({
     if (isEdit && hasAccount) {
       accountPayload = {
         email: formData.accountEmail.trim(),
+        password: formData.accountPassword || undefined,
         role: formData.accountRole,
         status: formData.accountStatus,
         permissions:
@@ -220,6 +248,7 @@ export default function EmployeeForm({
     } else if (!isEdit && formData.createAccount) {
       accountPayload = {
         email: formData.accountEmail.trim(),
+        password: formData.accountPassword || undefined,
         role: formData.accountRole,
         status: formData.accountStatus,
         permissions:
@@ -228,6 +257,7 @@ export default function EmployeeForm({
     } else if (isEdit && !hasAccount && formData.createAccount) {
       accountPayload = {
         email: formData.accountEmail.trim(),
+        password: formData.accountPassword || undefined,
         role: formData.accountRole,
         status: formData.accountStatus,
         permissions:
@@ -416,6 +446,46 @@ export default function EmployeeForm({
               </div>
 
               <div>
+                <Input
+                  label={hasAccount ? 'Nova senha (opcional)' : 'Senha inicial *'}
+                  name="accountPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={formData.accountPassword}
+                  onChange={handleChange}
+                  placeholder={hasAccount ? 'Deixe em branco para manter' : 'Mínimo de 8 caracteres'}
+                  required={!hasAccount}
+                />
+
+                {errors.accountPassword && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.accountPassword}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Input
+                  label={hasAccount ? 'Confirmar nova senha' : 'Confirmar senha inicial *'}
+                  name="accountPasswordConfirm"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={formData.accountPasswordConfirm}
+                  onChange={handleChange}
+                  placeholder="Digite a senha novamente"
+                  required={!hasAccount}
+                />
+
+                {errors.accountPasswordConfirm && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.accountPasswordConfirm}
+                  </p>
+                )}
+              </div>
+
+              <div>
                 <div className="flex items-center gap-1 mb-1">
                   <label
                     htmlFor="employee-account-role"
@@ -482,6 +552,11 @@ export default function EmployeeForm({
                 )}
               </div>
             </div>
+
+            <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+              A senha é enviada ao Supabase Auth e não fica armazenada nos
+              dados do Agro360.
+            </p>
 
             {formData.accountRole === 'admin' && (
               <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-sm">
