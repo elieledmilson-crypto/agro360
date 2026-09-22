@@ -6,7 +6,13 @@ import {
   User,
   UserRole,
 } from '../types'
-import { getStorageItem, setStorageItem, generateId } from './storage'
+import {
+  flushStorageWrites,
+  generateId,
+  getStorageItem,
+  setStorageItem,
+} from './storage'
+import { supabase } from '../lib/supabase'
 import { isPermissionKey } from './permissionService'
 
 const EMPLOYEES_KEY = 'agro360_employees'
@@ -322,9 +328,13 @@ function assertLastAdminProtected(state: ProjectedState): void {
 
 // -------------------- Escrita: employees + accounts --------------------
 
+type AccessAccountProvisionInput = AccessAccountInput & {
+  password?: string
+}
+
 export interface EmployeeWithAccountInput {
   employee: EmployeeInput
-  account?: AccessAccountInput | null
+  account?: AccessAccountProvisionInput | null
 }
 
 export interface EmployeeWithAccountResult {
@@ -332,52 +342,251 @@ export interface EmployeeWithAccountResult {
   account?: AccessAccount
 }
 
-export function createEmployeeWithOptionalAccount(
+interface RemoteEmployeeResponse {
+  employee: {
+    id: string
+    createdAt: string
+    updatedAt: string
+  }
+  account: {
+    userId: string
+    email: string
+    role: UserRole
+    permissions: string[]
+    status: AccessAccountStatus
+    createdAt: string
+    updatedAt: string
+  } | null
+}
+
+async function getFunctionErrorMessage(
+  error: unknown,
+): Promise<string> {
+  if (error && typeof error === 'object') {
+    const context = (
+      error as {
+        context?: Response
+      }
+    ).context
+
+    if (
+      context &&
+      typeof context.json === 'function'
+    ) {
+      try {
+        const body = await context.json() as unknown
+
+        if (
+          body &&
+          typeof body === 'object' &&
+          typeof (
+            body as Record<string, unknown>
+          ).error === 'string'
+        ) {
+          return (
+            body as Record<string, string>
+          ).error
+        }
+      } catch {
+        // Usa a mensagem original abaixo.
+      }
+    }
+
+    const message = (
+      error as {
+        message?: unknown
+      }
+    ).message
+
+    if (typeof message === 'string' && message.trim()) {
+      return message
+    }
+  }
+
+  return 'Não foi possível salvar o funcionário.'
+}
+
+async function invokeEmployeeAccess(
+  propertyId: string,
+  action: 'create' | 'update',
+  employee: Employee & {
+    passwordNeverStored?: never
+  },
+  account:
+    | (
+        AccessAccountInput & {
+          password?: string
+        }
+      )
+    | null,
+  accountUserId?: string,
+): Promise<RemoteEmployeeResponse> {
+  const {
+    data,
+    error,
+  } = await supabase.functions.invoke<RemoteEmployeeResponse>(
+    'manage-employee-access',
+    {
+      body: {
+        action,
+        propertyId,
+        employee: {
+          id: employee.id,
+          name: employee.name,
+          function: employee.function,
+          phone: employee.phone ?? null,
+          email: employee.email ?? null,
+          status: employee.status,
+          notes: employee.notes ?? null,
+        },
+        account: account
+          ? {
+              email: account.email,
+              password: account.password,
+              role: account.role,
+              permissions: account.permissions,
+              status: account.status,
+            }
+          : null,
+        accountUserId: accountUserId ?? null,
+      },
+    },
+  )
+
+  if (error) {
+    throw new Error(
+      await getFunctionErrorMessage(error),
+    )
+  }
+
+  if (
+    !data ||
+    !data.employee ||
+    typeof data.employee.id !== 'string'
+  ) {
+    throw new Error(
+      'O servidor não retornou os dados do funcionário.',
+    )
+  }
+
+  return data
+}
+
+function toRemoteAccountInput(
+  data: AccessAccountProvisionInput,
+  employeeId: string,
+): AccessAccountInput & {
+  password?: string
+} {
+  const normalized =
+    validateAndNormalizeAccountInput({
+      ...data,
+      employeeId,
+    })
+
+  return {
+    ...normalized,
+    password:
+      typeof data.password === 'string' &&
+      data.password.length > 0
+        ? data.password
+        : undefined,
+  }
+}
+
+function toLocalAccount(
+  employeeId: string,
+  remote: NonNullable<
+    RemoteEmployeeResponse['account']
+  >,
+): AccessAccount {
+  return {
+    id: remote.userId,
+    employeeId,
+    email: normalizeAccessEmail(remote.email),
+    role: remote.role,
+    permissions: remote.permissions.filter(isPermissionKey),
+    status: remote.status,
+    createdAt: remote.createdAt,
+    updatedAt: remote.updatedAt,
+  }
+}
+
+export async function createEmployeeWithOptionalAccount(
+  propertyId: string,
   data: EmployeeWithAccountInput,
-): EmployeeWithAccountResult {
+): Promise<EmployeeWithAccountResult> {
   initializeEmployeesIfNeeded()
 
-  const normalizedEmployee = validateAndNormalizeEmployeeInput(data.employee)
+  if (!propertyId.trim()) {
+    throw new Error('Propriedade não encontrada.')
+  }
 
+  const normalizedEmployee =
+    validateAndNormalizeEmployeeInput(data.employee)
+
+  const employeeId = generateId()
   const now = new Date().toISOString()
 
-  const newEmployee: Employee = {
+  const pendingEmployee: Employee = {
     ...normalizedEmployee,
-    id: generateId(),
+    id: employeeId,
     createdAt: now,
     updatedAt: now,
   }
 
-  let newAccount: AccessAccount | undefined
+  let normalizedAccount:
+    | (
+        AccessAccountInput & {
+          password?: string
+        }
+      )
+    | undefined
 
   if (data.account) {
-    const normalizedAccount = validateAndNormalizeAccountInput({
-      ...data.account,
-      employeeId: newEmployee.id,
-    })
+    normalizedAccount =
+      toRemoteAccountInput(
+        data.account,
+        employeeId,
+      )
 
-    ensureEmailIsUnique(normalizedAccount.email)
+    ensureEmailIsUnique(
+      normalizedAccount.email,
+    )
 
-    newAccount = {
-      ...normalizedAccount,
-      id: generateId(),
-      createdAt: now,
-      updatedAt: now,
+    if (
+      !normalizedAccount.password ||
+      normalizedAccount.password.length < 8
+    ) {
+      throw new Error(
+        'A senha inicial deve ter pelo menos 8 caracteres.',
+      )
     }
   }
 
-  // Simula estado resultante
-  const employeesBefore = getRawEmployeeEntries()
-  const accountsBefore = getRawAccountEntries()
+  const employeesBefore =
+    getRawEmployeeEntries()
+  const accountsBefore =
+    getRawAccountEntries()
 
   const projectedEmployees = [
     ...employeesBefore.filter(isEmployee),
-    newEmployee,
+    pendingEmployee,
   ]
 
-  const projectedAccounts = [
+  const projectedAccounts: AccessAccount[] = [
     ...accountsBefore.filter(isAccessAccount),
-    ...(newAccount ? [newAccount] : []),
+    ...(normalizedAccount
+      ? [
+          {
+            ...normalizedAccount,
+            id: 'pending-auth-user',
+            employeeId,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ]
+      : []),
   ]
 
   assertLastAdminProtected({
@@ -385,16 +594,50 @@ export function createEmployeeWithOptionalAccount(
     accounts: projectedAccounts,
   })
 
-  const nextEmployees = [...employeesBefore, newEmployee]
-  const nextAccounts = newAccount
-    ? [...accountsBefore, newAccount]
-    : accountsBefore
+  const remote =
+    await invokeEmployeeAccess(
+      propertyId,
+      'create',
+      pendingEmployee,
+      normalizedAccount ?? null,
+    )
 
-  setStorageItem(EMPLOYEES_KEY, nextEmployees)
+  const newEmployee: Employee = {
+    ...normalizedEmployee,
+    id: employeeId,
+    createdAt:
+      remote.employee.createdAt || now,
+    updatedAt:
+      remote.employee.updatedAt || now,
+  }
+
+  const newAccount =
+    remote.account
+      ? toLocalAccount(
+          employeeId,
+          remote.account,
+        )
+      : undefined
+
+  setStorageItem(
+    EMPLOYEES_KEY,
+    [
+      ...employeesBefore,
+      newEmployee,
+    ],
+  )
 
   if (newAccount) {
-    setStorageItem(ACCOUNTS_KEY, nextAccounts)
+    setStorageItem(
+      ACCOUNTS_KEY,
+      [
+        ...accountsBefore,
+        newAccount,
+      ],
+    )
   }
+
+  await flushStorageWrites()
 
   return {
     employee: newEmployee,
@@ -402,125 +645,181 @@ export function createEmployeeWithOptionalAccount(
   }
 }
 
-export function updateEmployeeWithOptionalAccount(
+export async function updateEmployeeWithOptionalAccount(
+  propertyId: string,
   employeeId: string,
   data: EmployeeWithAccountInput,
-): EmployeeWithAccountResult | undefined {
+): Promise<EmployeeWithAccountResult | undefined> {
   initializeEmployeesIfNeeded()
 
-  const currentEmployee = getEmployeeById(employeeId)
-
-  if (!currentEmployee) return undefined
-
-  const normalizedEmployee = validateAndNormalizeEmployeeInput(data.employee)
-
-  const currentAccount = getAccessAccountByEmployeeId(employeeId)
-
-  let normalizedAccount: AccessAccountInput | undefined
-
-  if (data.account && data.account.employeeId !== employeeId) {
-    // força consistência
-    normalizedAccount = validateAndNormalizeAccountInput({
-      ...data.account,
-      employeeId,
-    })
-  } else if (data.account) {
-    normalizedAccount = validateAndNormalizeAccountInput(data.account)
+  if (!propertyId.trim()) {
+    throw new Error('Propriedade não encontrada.')
   }
 
-  if (normalizedAccount) {
+  const currentEmployee =
+    getEmployeeById(employeeId)
+
+  if (!currentEmployee) {
+    return undefined
+  }
+
+  const normalizedEmployee =
+    validateAndNormalizeEmployeeInput(data.employee)
+
+  const currentAccount =
+    getAccessAccountByEmployeeId(employeeId)
+
+  let normalizedAccount:
+    | (
+        AccessAccountInput & {
+          password?: string
+        }
+      )
+    | undefined
+
+  if (data.account) {
+    normalizedAccount =
+      toRemoteAccountInput(
+        data.account,
+        employeeId,
+      )
+
     ensureEmailIsUnique(
       normalizedAccount.email,
       currentAccount?.id,
     )
 
-    if (!currentAccount && employeeHasAccessAccount(employeeId)) {
+    if (
+      !currentAccount &&
+      (
+        !normalizedAccount.password ||
+        normalizedAccount.password.length < 8
+      )
+    ) {
       throw new Error(
-        'Este funcionário já possui uma conta de acesso vinculada.',
+        'Informe uma senha inicial com pelo menos 8 caracteres para criar a conta de acesso.',
       )
     }
   }
 
   const now = new Date().toISOString()
 
-  const updatedEmployee: Employee = {
+  const pendingEmployee: Employee = {
     ...normalizedEmployee,
     id: currentEmployee.id,
     createdAt: currentEmployee.createdAt,
     updatedAt: now,
   }
 
-  let updatedAccount: AccessAccount | undefined
+  let pendingAccount:
+    | AccessAccount
+    | undefined
 
-  if (normalizedAccount && currentAccount) {
-    updatedAccount = {
+  if (normalizedAccount) {
+    pendingAccount = {
       ...normalizedAccount,
-      id: currentAccount.id,
-      createdAt: currentAccount.createdAt,
-      updatedAt: now,
-    }
-  } else if (normalizedAccount && !currentAccount) {
-    updatedAccount = {
-      ...normalizedAccount,
-      id: generateId(),
-      createdAt: now,
+      id:
+        currentAccount?.id ??
+        'pending-auth-user',
+      employeeId,
+      createdAt:
+        currentAccount?.createdAt ??
+        now,
       updatedAt: now,
     }
   }
 
-  // Simula estado resultante
-  const employeesBefore = getRawEmployeeEntries()
-  const accountsBefore = getRawAccountEntries()
+  const employeesBefore =
+    getRawEmployeeEntries()
+  const accountsBefore =
+    getRawAccountEntries()
 
-  const projectedEmployees = employeesBefore
-    .filter(isEmployee)
-    .map(e => (e.id === employeeId ? updatedEmployee : e))
+  const projectedEmployees =
+    employeesBefore
+      .filter(isEmployee)
+      .map(employee =>
+        employee.id === employeeId
+          ? pendingEmployee
+          : employee,
+      )
 
-  let projectedAccounts: AccessAccount[]
-
-  if (updatedAccount) {
-    const existsInProjected = accountsBefore
-      .filter(isAccessAccount)
-      .some(a => a.id === updatedAccount!.id)
-
-    projectedAccounts = existsInProjected
+  const projectedAccounts =
+    pendingAccount
       ? accountsBefore
           .filter(isAccessAccount)
-          .map(a =>
-            a.id === updatedAccount!.id ? updatedAccount! : a,
+          .filter(
+            account =>
+              account.employeeId !== employeeId,
           )
-      : [...accountsBefore.filter(isAccessAccount), updatedAccount]
-  } else {
-    projectedAccounts = accountsBefore.filter(isAccessAccount)
-  }
+          .concat(pendingAccount)
+      : accountsBefore.filter(isAccessAccount)
 
   assertLastAdminProtected({
     employees: projectedEmployees,
     accounts: projectedAccounts,
   })
 
-  // Persistir
-  const nextEmployees = employeesBefore.map(entry =>
-    isEmployee(entry) && entry.id === employeeId
-      ? updatedEmployee
-      : entry,
+  const remote =
+    await invokeEmployeeAccess(
+      propertyId,
+      'update',
+      pendingEmployee,
+      normalizedAccount ?? null,
+      currentAccount?.id,
+    )
+
+  const updatedEmployee: Employee = {
+    ...normalizedEmployee,
+    id: currentEmployee.id,
+    createdAt:
+      remote.employee.createdAt ||
+      currentEmployee.createdAt,
+    updatedAt:
+      remote.employee.updatedAt ||
+      now,
+  }
+
+  const updatedAccount =
+    remote.account
+      ? toLocalAccount(
+          employeeId,
+          remote.account,
+        )
+      : undefined
+
+  const nextEmployees =
+    employeesBefore.map(entry =>
+      isEmployee(entry) &&
+      entry.id === employeeId
+        ? updatedEmployee
+        : entry,
+    )
+
+  setStorageItem(
+    EMPLOYEES_KEY,
+    nextEmployees,
   )
 
-  setStorageItem(EMPLOYEES_KEY, nextEmployees)
-
   if (updatedAccount) {
-    const nextAccounts = accountsBefore.some(
-      entry => isAccessAccount(entry) && entry.id === updatedAccount!.id,
-    )
-      ? accountsBefore.map(entry =>
-          isAccessAccount(entry) && entry.id === updatedAccount!.id
-            ? updatedAccount!
-            : entry,
-        )
-      : [...accountsBefore, updatedAccount]
+    const withoutCurrent =
+      accountsBefore.filter(
+        entry =>
+          !(
+            isAccessAccount(entry) &&
+            entry.employeeId === employeeId
+          ),
+      )
 
-    setStorageItem(ACCOUNTS_KEY, nextAccounts)
+    setStorageItem(
+      ACCOUNTS_KEY,
+      [
+        ...withoutCurrent,
+        updatedAccount,
+      ],
+    )
   }
+
+  await flushStorageWrites()
 
   return {
     employee: updatedEmployee,
