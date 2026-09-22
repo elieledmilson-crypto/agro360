@@ -239,6 +239,7 @@ async function assertLastAdminSafe(
 async function updateAuthState(
   admin: ReturnType<typeof createClient>,
   userId: string,
+  propertyId: string,
   employee: EmployeePayload,
   account: AccountPayload,
   effectiveStatus: AccountStatus,
@@ -248,7 +249,7 @@ async function updateAuthState(
     user_metadata: {
       name: employee.name,
       account_kind: 'employee',
-      property_id: null,
+      property_id: propertyId,
       employee_id: employee.id,
     },
     ban_duration:
@@ -491,6 +492,7 @@ Deno.serve(async (req: Request) => {
       await updateAuthState(
         admin,
         membership.user_id,
+        body.propertyId,
         {
           ...body.employee,
         },
