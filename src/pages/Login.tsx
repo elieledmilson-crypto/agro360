@@ -13,24 +13,35 @@ import { Sprout } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
+import { requestPasswordReset } from '../services/authService'
 
-type AuthMode = 'login' | 'register'
+type AuthMode = 'login' | 'register' | 'forgot'
 
 export default function Login() {
-  const [mode, setMode] = useState<AuthMode>('login')
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const [mode, setMode] = useState<AuthMode>(() =>
+    (location.state as { openForgotPassword?: boolean } | null)
+      ?.openForgotPassword
+      ? 'forgot'
+      : 'login',
+  )
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirmation, setPasswordConfirmation] =
     useState('')
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState(() =>
+    new URLSearchParams(location.search).get('password-reset') ===
+    'success'
+      ? 'Senha redefinida com sucesso. Entre com sua nova senha.'
+      : '',
+  )
   const [loading, setLoading] = useState(false)
 
   const { login, register } = useAuth()
-
-  const navigate = useNavigate()
-  const location = useLocation()
 
   const from =
     (
@@ -49,8 +60,34 @@ export default function Login() {
     setError('')
     setMessage('')
 
-    if (!email || !password) {
-      setError('Preencha todos os campos obrigatórios.')
+    if (!email.trim()) {
+      setError('Informe o e-mail da sua conta.')
+      return
+    }
+
+    if (mode === 'forgot') {
+      setLoading(true)
+
+      try {
+        await requestPasswordReset(email)
+        setMessage(
+          'Se houver uma conta associada a esse e-mail, enviaremos um link para redefinir a senha. Verifique também a pasta de spam.',
+        )
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Não foi possível solicitar a recuperação de senha.',
+        )
+      } finally {
+        setLoading(false)
+      }
+
+      return
+    }
+
+    if (!password) {
+      setError('Informe sua senha.')
       return
     }
 
@@ -155,41 +192,51 @@ export default function Login() {
           onSubmit={handleSubmit}
           className="bg-white dark:bg-gray-900 rounded-xl shadow-lg p-6 md:p-8"
         >
-          <div className="grid grid-cols-2 gap-2 mb-6">
-            <button
-              type="button"
-              onClick={() =>
-                switchMode('login')
-              }
-              className={
-                mode === 'login'
-                  ? 'px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium'
-                  : 'px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-medium'
-              }
-            >
-              Entrar
-            </button>
+          {mode !== 'forgot' && (
+            <div className="grid grid-cols-2 gap-2 mb-6">
+              <button
+                type="button"
+                onClick={() =>
+                  switchMode('login')
+                }
+                className={
+                  mode === 'login'
+                    ? 'px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium'
+                    : 'px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-medium'
+                }
+              >
+                Entrar
+              </button>
 
-            <button
-              type="button"
-              onClick={() =>
-                switchMode('register')
-              }
-              className={
-                mode === 'register'
-                  ? 'px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium'
-                  : 'px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-medium'
-              }
-            >
-              Criar conta
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() =>
+                  switchMode('register')
+                }
+                className={
+                  mode === 'register'
+                    ? 'px-3 py-2 rounded-lg bg-green-600 text-white text-sm font-medium'
+                    : 'px-3 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-sm font-medium'
+                }
+              >
+                Criar conta
+              </button>
+            </div>
+          )}
 
-          <h2 className="text-lg font-semibold mb-6">
+          <h2 className="text-lg font-semibold mb-2">
             {mode === 'login'
               ? 'Entrar'
-              : 'Criar acesso'}
+              : mode === 'register'
+                ? 'Criar acesso'
+                : 'Recuperar senha'}
           </h2>
+
+          {mode === 'forgot' && (
+            <p className="mb-6 text-sm text-gray-600 dark:text-gray-400">
+              Informe o e-mail da sua conta e enviaremos instruções para criar uma nova senha.
+            </p>
+          )}
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
@@ -227,17 +274,39 @@ export default function Login() {
               required
             />
 
-            <Input
-              label="Senha"
-              type="password"
-              value={password}
-              onChange={event =>
-                setPassword(event.target.value)
-              }
-              placeholder="••••••••"
-              minLength={8}
-              required
-            />
+            {mode !== 'forgot' && (
+              <Input
+                label="Senha"
+                type="password"
+                value={password}
+                onChange={event =>
+                  setPassword(event.target.value)
+                }
+                placeholder="••••••••"
+                minLength={8}
+                required
+              />
+            )}
+
+            {mode === 'login' && (
+              <button
+                type="button"
+                onClick={() => switchMode('forgot')}
+                className="text-sm text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-left"
+              >
+                Esqueci minha senha
+              </button>
+            )}
+
+            {mode === 'forgot' && (
+              <button
+                type="button"
+                onClick={() => switchMode('login')}
+                className="text-sm text-green-700 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 text-left"
+              >
+                Voltar para entrar
+              </button>
+            )}
 
             {mode === 'register' && (
               <Input
@@ -262,10 +331,14 @@ export default function Login() {
             className="w-full mt-6"
           >
             {loading
-              ? 'Aguarde...'
+              ? mode === 'forgot'
+                ? 'Enviando...'
+                : 'Aguarde...'
               : mode === 'login'
                 ? 'Entrar'
-                : 'Criar conta'}
+                : mode === 'register'
+                  ? 'Criar conta'
+                  : 'Enviar link de recuperação'}
           </Button>
 
           <p className="mt-4 text-xs text-center text-gray-500 dark:text-gray-400">

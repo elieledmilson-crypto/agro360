@@ -272,6 +272,62 @@ export async function updateAccountPassword(
   }
 }
 
+export async function requestPasswordReset(
+  email: string,
+): Promise<void> {
+  const normalizedEmail = email.trim().toLowerCase()
+
+  if (!normalizedEmail) {
+    throw new Error('Informe o e-mail da sua conta.')
+  }
+
+  const redirectTo = new URL(
+    '/redefinir-senha',
+    window.location.origin,
+  ).toString()
+
+  const { error } = await supabase.auth.resetPasswordForEmail(
+    normalizedEmail,
+    { redirectTo },
+  )
+
+  if (error) {
+    throw new Error(
+      error.message ||
+        'Não foi possível solicitar a recuperação de senha.',
+    )
+  }
+}
+
+export async function updatePasswordFromRecovery(
+  password: string,
+): Promise<void> {
+  if (password.length < 8) {
+    throw new Error('A senha deve ter pelo menos 8 caracteres.')
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  if (sessionError || !session) {
+    throw new Error(
+      'O link de recuperação é inválido ou expirou. Solicite um novo link.',
+    )
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password,
+  })
+
+  if (error) {
+    throw new Error(
+      error.message || 'Não foi possível atualizar sua senha.',
+    )
+  }
+}
+
 export async function logout(): Promise<void> {
   const { error } = await supabase.auth.signOut()
 
