@@ -18,7 +18,7 @@ import HelpTip from '../../components/ui/HelpTip'
 export default function EditEmployeePage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { refreshUser } = useAuth()
+  const { refreshUser, user } = useAuth()
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -50,7 +50,7 @@ export default function EditEmployeePage() {
     )
   }
 
-  const handleSubmit = (
+  const handleSubmit = async (
     employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>,
     accountData?: EmployeeAccountPayload | null,
   ) => {
@@ -58,24 +58,33 @@ export default function EditEmployeePage() {
     setSubmitError('')
 
     try {
-      const result = updateEmployeeWithOptionalAccount(employee.id, {
+      if (!user?.propertyId) {
+        throw new Error('Propriedade não encontrada.')
+      }
+
+      const result = await updateEmployeeWithOptionalAccount(
+        user.propertyId,
+        employee.id,
+        {
         employee: employeeData,
         account: accountData
           ? {
               employeeId: employee.id,
               email: accountData.email,
+              password: accountData.password,
               role: accountData.role,
               status: accountData.status,
               permissions: accountData.permissions,
             }
           : null,
-      })
+        },
+      )
 
       if (!result) {
         throw new Error('Funcionário não encontrado.')
       }
 
-      refreshUser()
+      await refreshUser()
 
       navigate(`/funcionarios/${employee.id}`, {
         state: {
