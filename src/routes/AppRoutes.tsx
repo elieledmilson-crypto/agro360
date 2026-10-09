@@ -5,6 +5,7 @@ import {
 } from 'react-router-dom'
 import AppLayout from '../components/layout/AppLayout'
 import Login from '../pages/Login'
+import ResetPasswordPage from '../pages/ResetPasswordPage'
 import Dashboard from '../pages/Dashboard'
 import Property from '../pages/Property'
 import NotFound from '../pages/NotFound'
@@ -121,6 +122,8 @@ import { PropertyReadyRoute } from '../components/common/PropertyReadyRoute'
 export default function AppRoutes() {
   return (
     <Routes>
+      <Route path="/redefinir-senha" element={<ResetPasswordPage />} />
+
       <Route element={<PublicOnlyRoute />}>
         <Route path="/login" element={<Login />} />
       </Route>
