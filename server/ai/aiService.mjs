@@ -8,7 +8,7 @@
 
 import { SYSTEM_PROMPT } from './systemPrompt.mjs'
 
-const REQUEST_TIMEOUT_MS = 45000
+const REQUEST_TIMEOUT_MS = 18000
 
 function getApiKey() {
   const apiKey = process.env.GEMINI_API_KEY?.trim()
@@ -24,13 +24,8 @@ function getApiKey() {
 
 function getModel() {
   const configuredModel =
-    process.env.GEMINI_MODEL?.trim()
-
-  if (!configuredModel) {
-    throw new Error(
-      'CONFIGURATION_ERROR: GEMINI_MODEL não configurado.',
-    )
-  }
+    process.env.GEMINI_MODEL?.trim() ||
+    'gemini-3.6-flash'
 
   // Aceita tanto:
   // GEMINI_MODEL=gemini-3.6-flash
@@ -347,17 +342,13 @@ export async function generateAnswer(
       },
 
       contents,
+
+      generationConfig: {
+        responseMimeType: 'application/json',
+      },
     })
 
-  const fallbackModel =
-    'gemini-3.5-flash'
-
-  const modelsToTry =
-    [model, fallbackModel]
-      .filter(
-        (value, index, list) =>
-          list.indexOf(value) === index,
-      )
+  const modelsToTry = [model]
 
   let lastError =
     'AI_PROVIDER_ERROR'
@@ -368,7 +359,7 @@ export async function generateAnswer(
   ) {
     for (
       let attempt = 1;
-      attempt <= 3;
+      attempt <= 2;
       attempt += 1
     ) {
       const controller =
