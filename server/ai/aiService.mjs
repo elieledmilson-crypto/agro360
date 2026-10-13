@@ -305,26 +305,13 @@ export async function generateAnswer(
     '\n\nPERGUNTA DO USUÁRIO:\n' +
     message
 
-  const historyBlock =
-    history.length > 0
-      ? 'HISTÓRICO DA CONVERSA (apenas para referência):\n' +
-        history
-          .map(
-            item =>
-              `${item.role === 'assistant' ? 'ASSISTENTE' : 'USUÁRIO'}: ${item.content}`,
-          )
-          .join('\n') +
-        '\n\n'
-      : ''
-
   const contents = [
+    ...buildGeminiHistory(history),
     {
       role: 'user',
       parts: [
         {
-          text:
-            historyBlock +
-            contextBlock,
+          text: contextBlock,
         },
       ],
     },
@@ -407,7 +394,7 @@ export async function generateAnswer(
           lastError =
             'AI_TIMEOUT'
 
-          if (attempt < 3) {
+          if (attempt < 2) {
             await new Promise(
               resolve =>
                 setTimeout(
@@ -425,7 +412,7 @@ export async function generateAnswer(
         lastError =
           'AI_PROVIDER_ERROR'
 
-        if (attempt < 3) {
+        if (attempt < 2) {
           await new Promise(
             resolve =>
               setTimeout(
@@ -468,7 +455,7 @@ export async function generateAnswer(
 
         if (
           retryable &&
-          attempt < 3
+          attempt < 2
         ) {
           await new Promise(
             resolve =>
