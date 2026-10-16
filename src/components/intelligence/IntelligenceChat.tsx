@@ -342,23 +342,35 @@ export default function IntelligenceChat({
         setError(null)
 
         try {
+          // A seleção do contexto deve considerar o diálogo recente,
+          // não apenas a última mensagem. Respostas de acompanhamento
+          // normalmente contêm só os campos solicitados (ex.: cultura e
+          // safra) e podem omitir o código do talhão citado antes.
+          const recentMessages =
+            messages.slice(
+              -MAX_HISTORY_SENT,
+            )
+
+          const contextQuestion = [
+            ...recentMessages.map(
+              message => message.content,
+            ),
+            content,
+          ].join('\n')
+
           const context =
             buildIntelligenceContext(
               user,
-              content,
+              contextQuestion,
             )
 
           const history =
-            messages
-              .slice(
-                -MAX_HISTORY_SENT,
-              )
-              .map(message => ({
-                role:
-                  message.role,
-                content:
-                  message.content,
-              }))
+            recentMessages.map(message => ({
+              role:
+                message.role,
+              content:
+                message.content,
+            }))
 
           const response =
             await sendIntelligenceChat(
