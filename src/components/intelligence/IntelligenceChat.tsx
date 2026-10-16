@@ -356,7 +356,7 @@ export default function IntelligenceChat({
               message => message.content,
             ),
             content,
-          ].join('\\n')
+          ].join('\n')
 
           const context =
             buildIntelligenceContext(
