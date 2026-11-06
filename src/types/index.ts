@@ -1039,9 +1039,55 @@ export interface IntelligenceContextMap {
   demarcatedAreas: IntelligenceContextList<IntelligenceContextMapLandArea>
 }
 
+export interface IntelligenceContextCropManagementEntry {
+  date: string
+  type: CropManagementType
+  description: string
+  productOrMaterial?: string
+  doseOrQuantity?: string
+  responsible?: string
+  notes?: string
+}
+
+export interface IntelligenceContextCropHarvest {
+  harvestDate: string
+  harvestedAreaHectares: number
+  productionQuantity: number
+  productionUnit: HarvestProductionUnit
+  sackWeightKg?: number
+  notes?: string
+}
+
+export interface IntelligenceContextCropLandArea {
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  status: LandAreaStatus
+  purpose?: string
+  description?: string
+}
+
+export interface IntelligenceContextCropCycle {
+  crop: string
+  cultivar?: string
+  season: string
+  status: CropCycleStatus
+  landArea?: IntelligenceContextCropLandArea | null
+  plantingDate?: string
+  expectedHarvestDate?: string
+  notes?: string
+  managements: IntelligenceContextList<IntelligenceContextCropManagementEntry>
+  harvest: IntelligenceContextCropHarvest | null
+}
+
 export interface IntelligenceContextCrops {
+  totalCycles: number
   activeCycles: number
   plannedCycles: number
+  completedCycles: number
+  cancelledCycles: number
+  cycleDetails: IntelligenceContextList<IntelligenceContextCropCycle>
   upcomingHarvests: IntelligenceContextList<string>
   overdueHarvests: IntelligenceContextList<string>
 }
