@@ -107,12 +107,19 @@ Deno.serve(async (req: Request) => {
 
   // Exclui primeiro as contas secundárias. Se alguma falhar, a fazenda e a
   // conta principal continuam disponíveis para corrigir e tentar novamente.
-  for (const userId of userIds.filter(id => id !== caller.id)) {
+  // properties.created_by usa ON DELETE RESTRICT. Por isso, a conta
+  // criadora e a conta atual são preservadas até a remoção da propriedade.
+  const secondaryUserIds = userIds.filter(
+    id => id !== caller.id && id !== property.created_by,
+  )
+
+  for (const userId of secondaryUserIds) {
     const { data: existingUser, error: lookupError } = await admin.auth.admin.getUserById(userId)
     if (lookupError && !isMissingUser(lookupError)) {
       return json(500, { error: 'Não foi possível verificar uma das contas de funcionário. Nenhum dado da fazenda foi removido.' })
     }
-    if (!existingUser.user) continue
+    if (lookupError && isMissingUser(lookupError)) continue
+    if (!existingUser?.user) continue
 
     const { error: deleteUserError } = await admin.auth.admin.deleteUser(userId)
     if (deleteUserError) {
@@ -135,13 +142,24 @@ Deno.serve(async (req: Request) => {
     })
   }
 
-  // O administrador é removido por último para que a operação possa ser
-  // autorizada e concluída mesmo depois de revogar as demais contas.
-  const { error: deleteOwnerError } = await admin.auth.admin.deleteUser(caller.id)
-  if (deleteOwnerError) {
-    return json(500, {
-      error: 'Os dados da fazenda foram excluídos, mas não foi possível remover a conta principal. Entre em contato com o suporte para concluir a exclusão da conta.',
-    })
+  // A conta criadora pode ser diferente do administrador que solicitou a
+  // operação. Ambas só podem ser removidas depois da fazenda (FK RESTRICT).
+  const finalUserIds = Array.from(new Set([property.created_by, caller.id]))
+  for (const userId of finalUserIds) {
+    const { data: existingUser, error: lookupError } = await admin.auth.admin.getUserById(userId)
+    if (lookupError && isMissingUser(lookupError)) continue
+    if (lookupError || !existingUser?.user) {
+      return json(500, {
+        error: 'Os dados da fazenda foram excluídos, mas não foi possível validar todas as contas principais. Entre em contato com o suporte para concluir a exclusão.',
+      })
+    }
+
+    const { error: deleteOwnerError } = await admin.auth.admin.deleteUser(userId)
+    if (deleteOwnerError) {
+      return json(500, {
+        error: 'Os dados da fazenda foram excluídos, mas não foi possível remover uma das contas principais. Entre em contato com o suporte para concluir a exclusão da conta.',
+      })
+    }
   }
 
   return json(200, { success: true, message: 'Fazenda e todas as contas vinculadas foram excluídas permanentemente.' })
