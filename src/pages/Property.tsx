@@ -22,6 +22,7 @@ import {
   updateProperty,
 } from '../services/propertyService'
 import type { Farm } from '../types'
+import DeletePropertySection from '../components/DeletePropertySection'
 
 interface PropertyFormState {
   name: string
@@ -397,6 +398,13 @@ export default function Property() {
               </p>
             )}
           </Card>
+
+          {canEdit && (
+            <DeletePropertySection
+              propertyId={farm.id}
+              propertyName={farm.name}
+            />
+          )}
         </>
       )}
     </div>
