@@ -913,11 +913,36 @@ export interface IntelligenceContextList<T> {
   items: T[]
 }
 
+export interface IntelligenceContextAnimalLandArea {
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  status: LandAreaStatus
+}
+
+export interface IntelligenceContextAnimalDetails {
+  identification: string
+  name?: string
+  species: AnimalSpecies
+  breed: string
+  sex: AnimalSex
+  birthDate?: string
+  category: AnimalCategory
+  status: AnimalStatus
+  currentWeight?: number
+  origin?: string
+  notes?: string
+  lotName?: string
+  landArea?: IntelligenceContextAnimalLandArea | null
+}
+
 export interface IntelligenceContextAnimals {
   total: number
   active: number
   bySpecies?: Record<string, number>
   byStatus?: Record<string, number>
+  animalDetails: IntelligenceContextList<IntelligenceContextAnimalDetails>
 }
 
 export interface IntelligenceContextHealthEntry {
