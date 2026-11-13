@@ -7,6 +7,7 @@ import {
   IntelligenceContextAnimalLand,
   IntelligenceContextAnimalLandEntry,
   IntelligenceContextAnimals,
+  IntelligenceContextAnimalDetails,
   IntelligenceContextCrops,
   IntelligenceContextCropCycle,
   IntelligenceContextFinance,
@@ -34,6 +35,7 @@ import {
 } from '../types'
 import { userHasPermission } from './permissionService'
 import { getAnimals } from './animalService'
+import { getLots } from './lotService'
 import {
   getHealthOccurrences,
   getTreatments,
@@ -328,7 +330,9 @@ export function selectModulesForQuestion(
 }
 
 function buildAnimalsContext(
+  user: User,
   animals: Animal[],
+  question: string,
 ): IntelligenceContextAnimals {
   const bySpecies:
     Record<string, number> = {}
@@ -350,6 +354,101 @@ function buildAnimalsContext(
       ) + 1
   }
 
+  const lotsById = new Map(
+    getLots().map(lot => [
+      lot.id,
+      lot,
+    ] as const),
+  )
+
+  // A associação com Terras só é incluída quando o usuário
+  // possui permissão para consultar esse módulo.
+  const canSeeLandDetails =
+    userHasPermission(user, 'land')
+
+  const areasById = canSeeLandDetails
+    ? new Map(
+        getLandAreas().map(area => [
+          area.id,
+          area,
+        ] as const),
+      )
+    : undefined
+
+  const details: IntelligenceContextAnimalDetails[] =
+    animals.map(animal => {
+      const detail: IntelligenceContextAnimalDetails = {
+        identification: animal.identification,
+        species: animal.species,
+        breed: animal.breed,
+        sex: animal.sex,
+        category: animal.category,
+        status: animal.status,
+      }
+
+      if (animal.name) {
+        detail.name = animal.name
+      }
+
+      if (animal.birthDate) {
+        detail.birthDate = animal.birthDate
+      }
+
+      if (animal.currentWeight !== undefined) {
+        detail.currentWeight = animal.currentWeight
+      }
+
+      if (animal.origin) {
+        detail.origin = animal.origin
+      }
+
+      if (animal.notes) {
+        detail.notes = animal.notes
+      }
+
+      if (animal.lotId) {
+        const lot = lotsById.get(animal.lotId)
+        if (lot) {
+          detail.lotName = lot.name
+        }
+      }
+
+      if (areasById) {
+        if (animal.landAreaId) {
+          const area = areasById.get(animal.landAreaId)
+          detail.landArea = area
+            ? {
+                code: area.code,
+                name: area.name,
+                type: area.type,
+                areaHectares: area.areaHectares,
+                status: area.status,
+              }
+            : null
+        } else {
+          detail.landArea = null
+        }
+      }
+
+      return detail
+    })
+
+  const prioritizedDetails =
+    prioritizeByKeys(
+      details,
+      question,
+      animal => [
+        animal.identification,
+        animal.name ?? '',
+        animal.species,
+        animal.breed,
+        animal.category,
+        animal.lotName ?? '',
+        animal.landArea?.code ?? '',
+        animal.landArea?.name ?? '',
+      ],
+    )
+
   return {
     total: animals.length,
     active: animals.filter(
@@ -358,6 +457,8 @@ function buildAnimalsContext(
     ).length,
     bySpecies,
     byStatus,
+    animalDetails:
+      makeList(prioritizedDetails),
   }
 }
 
@@ -1537,7 +1638,9 @@ export function buildIntelligenceContext(
   if (wantsAnimals) {
     context.animals =
       buildAnimalsContext(
+        user,
         animals,
+        question,
       )
   }
 
