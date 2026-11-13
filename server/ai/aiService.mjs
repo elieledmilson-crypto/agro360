@@ -8,7 +8,8 @@
 
 import { SYSTEM_PROMPT } from './systemPrompt.mjs'
 
-const REQUEST_TIMEOUT_MS = 18000
+const REQUEST_TIMEOUT_MS = 16000
+const RETRY_TIMEOUT_MS = 7000
 
 function getApiKey() {
   const apiKey = process.env.GEMINI_API_KEY?.trim()
@@ -336,6 +337,9 @@ export async function generateAnswer(
     })
 
   const modelsToTry = [model]
+  const requestStartedAt = Date.now()
+  const contextBytes = Buffer.byteLength(JSON.stringify(context), 'utf8')
+  console.info(`[ai-server] request model=${model} history=${history.length} contextBytes=${contextBytes} bodyBytes=${Buffer.byteLength(requestBody, 'utf8')}`)
 
   let lastError =
     'AI_PROVIDER_ERROR'
@@ -349,6 +353,8 @@ export async function generateAnswer(
       attempt <= 2;
       attempt += 1
     ) {
+      const attemptStartedAt = Date.now()
+      console.info(`[ai-server] attempt-start model=${currentModel} attempt=${attempt}`)
       const controller =
         new AbortController()
 
@@ -357,7 +363,7 @@ export async function generateAnswer(
           () => {
             controller.abort()
           },
-          REQUEST_TIMEOUT_MS,
+          attempt === 1 ? REQUEST_TIMEOUT_MS : RETRY_TIMEOUT_MS,
         )
 
       const url =
@@ -497,12 +503,14 @@ export async function generateAnswer(
         continue
       }
 
+      console.info(`[ai-server] attempt-success model=${currentModel} attempt=${attempt} durationMs=${Date.now() - attemptStartedAt} totalMs=${Date.now() - requestStartedAt}`)
       return normalizeResponse(
         raw,
       )
     }
   }
 
+  console.warn(`[ai-server] request-failed durationMs=${Date.now() - requestStartedAt} reason=${lastError.split(':')[0]}`)
   throw new Error(
     lastError,
   )
