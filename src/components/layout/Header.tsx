@@ -86,7 +86,16 @@ export default function Header({
           )}
         </button>
 
-        <div className="flex items-center gap-2 pl-2 border-l border-gray-200 dark:border-gray-700">
+        <Link
+          to="/perfil"
+          className="flex items-center gap-2 pl-2 pr-2 py-1 rounded-lg border-l border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800"
+          aria-current={
+            location.pathname === '/perfil'
+              ? 'page'
+              : undefined
+          }
+          title="Meu perfil"
+        >
           <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
             <User className="w-4 h-4 text-green-700 dark:text-green-300" />
           </div>
@@ -94,7 +103,7 @@ export default function Header({
           <span className="hidden md:block text-sm font-medium">
             {user?.name}
           </span>
-        </div>
+        </Link>
 
         <button
           onClick={logout}

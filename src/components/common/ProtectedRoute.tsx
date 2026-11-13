@@ -7,8 +7,16 @@ import {
 import { useAuth } from '../../hooks/useAuth'
 
 export function ProtectedRoute() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
   const location = useLocation()
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-sm text-gray-600 dark:text-gray-300">
+        Carregando sessão...
+      </div>
+    )
+  }
 
   if (!isAuthenticated) {
     return (

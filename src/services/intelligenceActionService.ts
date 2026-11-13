@@ -1,7 +1,7 @@
 // Execução de ações assistidas do Assistente Agro360.
 //
 // IMPORTANTE:
-// - NUNCA acessa localStorage diretamente.
+// - NUNCA acessa armazenamento do navegador diretamente.
 // - Sempre utiliza os services oficiais do módulo correspondente.
 // - Revalida permissão no momento da execução (defense in depth).
 // - Retorna sucesso apenas quando o service oficial retornar sucesso.

@@ -19,6 +19,7 @@ export interface User {
   name: string
   email: string
   role: UserRole
+  propertyId?: string
   employeeId?: string
   permissions?: PermissionKey[]
 }
@@ -912,11 +913,36 @@ export interface IntelligenceContextList<T> {
   items: T[]
 }
 
+export interface IntelligenceContextAnimalLandArea {
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  status: LandAreaStatus
+}
+
+export interface IntelligenceContextAnimalDetails {
+  identification: string
+  name?: string
+  species: AnimalSpecies
+  breed: string
+  sex: AnimalSex
+  birthDate?: string
+  category: AnimalCategory
+  status: AnimalStatus
+  currentWeight?: number
+  origin?: string
+  notes?: string
+  lotName?: string
+  landArea?: IntelligenceContextAnimalLandArea | null
+}
+
 export interface IntelligenceContextAnimals {
   total: number
   active: number
   bySpecies?: Record<string, number>
   byStatus?: Record<string, number>
+  animalDetails: IntelligenceContextList<IntelligenceContextAnimalDetails>
 }
 
 export interface IntelligenceContextHealthEntry {
@@ -1038,9 +1064,55 @@ export interface IntelligenceContextMap {
   demarcatedAreas: IntelligenceContextList<IntelligenceContextMapLandArea>
 }
 
+export interface IntelligenceContextCropManagementEntry {
+  date: string
+  type: CropManagementType
+  description: string
+  productOrMaterial?: string
+  doseOrQuantity?: string
+  responsible?: string
+  notes?: string
+}
+
+export interface IntelligenceContextCropHarvest {
+  harvestDate: string
+  harvestedAreaHectares: number
+  productionQuantity: number
+  productionUnit: HarvestProductionUnit
+  sackWeightKg?: number
+  notes?: string
+}
+
+export interface IntelligenceContextCropLandArea {
+  code: string
+  name: string
+  type: LandAreaType
+  areaHectares: number
+  status: LandAreaStatus
+  purpose?: string
+  description?: string
+}
+
+export interface IntelligenceContextCropCycle {
+  crop: string
+  cultivar?: string
+  season: string
+  status: CropCycleStatus
+  landArea?: IntelligenceContextCropLandArea | null
+  plantingDate?: string
+  expectedHarvestDate?: string
+  notes?: string
+  managements: IntelligenceContextList<IntelligenceContextCropManagementEntry>
+  harvest: IntelligenceContextCropHarvest | null
+}
+
 export interface IntelligenceContextCrops {
+  totalCycles: number
   activeCycles: number
   plannedCycles: number
+  completedCycles: number
+  cancelledCycles: number
+  cycleDetails: IntelligenceContextList<IntelligenceContextCropCycle>
   upcomingHarvests: IntelligenceContextList<string>
   overdueHarvests: IntelligenceContextList<string>
 }

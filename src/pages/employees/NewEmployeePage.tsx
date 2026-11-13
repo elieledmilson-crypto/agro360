@@ -6,14 +6,16 @@ import EmployeeForm, {
 import { createEmployeeWithOptionalAccount } from '../../services/employeeService'
 import { Employee } from '../../types'
 import HelpTip from '../../components/ui/HelpTip'
+import { useAuth } from '../../hooks/useAuth'
 
 export default function NewEmployeePage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  const handleSubmit = (
+  const handleSubmit = async (
     employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>,
     accountData?: EmployeeAccountPayload | null,
   ) => {
@@ -21,12 +23,17 @@ export default function NewEmployeePage() {
     setSubmitError('')
 
     try {
-      createEmployeeWithOptionalAccount({
+      if (!user?.propertyId) {
+        throw new Error('Propriedade não encontrada.')
+      }
+
+      await createEmployeeWithOptionalAccount(user.propertyId, {
         employee: employeeData,
         account: accountData
           ? {
               employeeId: '',
               email: accountData.email,
+              password: accountData.password,
               role: accountData.role,
               status: accountData.status,
               permissions: accountData.permissions,

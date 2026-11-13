@@ -7,7 +7,9 @@ import {
   IntelligenceContextAnimalLand,
   IntelligenceContextAnimalLandEntry,
   IntelligenceContextAnimals,
+  IntelligenceContextAnimalDetails,
   IntelligenceContextCrops,
+  IntelligenceContextCropCycle,
   IntelligenceContextFinance,
   IntelligenceContextFinanceBySource,
   IntelligenceContextFinanceCategory,
@@ -33,6 +35,7 @@ import {
 } from '../types'
 import { userHasPermission } from './permissionService'
 import { getAnimals } from './animalService'
+import { getLots } from './lotService'
 import {
   getHealthOccurrences,
   getTreatments,
@@ -42,6 +45,8 @@ import {
 import { getLandAreas } from './landService'
 import { getActivePaddockOccupations } from './paddockOccupationService'
 import { getCropCycles } from './cropService'
+import { getCropManagementsByCropCycleId } from './cropManagementService'
+import { getHarvestRecordByCropCycleId } from './harvestService'
 import { getMachines } from './machineService'
 import {
   getInventoryItems,
@@ -325,7 +330,9 @@ export function selectModulesForQuestion(
 }
 
 function buildAnimalsContext(
+  user: User,
   animals: Animal[],
+  question: string,
 ): IntelligenceContextAnimals {
   const bySpecies:
     Record<string, number> = {}
@@ -347,6 +354,101 @@ function buildAnimalsContext(
       ) + 1
   }
 
+  const lotsById = new Map(
+    getLots().map(lot => [
+      lot.id,
+      lot,
+    ] as const),
+  )
+
+  // A associação com Terras só é incluída quando o usuário
+  // possui permissão para consultar esse módulo.
+  const canSeeLandDetails =
+    userHasPermission(user, 'land')
+
+  const areasById = canSeeLandDetails
+    ? new Map(
+        getLandAreas().map(area => [
+          area.id,
+          area,
+        ] as const),
+      )
+    : undefined
+
+  const details: IntelligenceContextAnimalDetails[] =
+    animals.map(animal => {
+      const detail: IntelligenceContextAnimalDetails = {
+        identification: animal.identification,
+        species: animal.species,
+        breed: animal.breed,
+        sex: animal.sex,
+        category: animal.category,
+        status: animal.status,
+      }
+
+      if (animal.name) {
+        detail.name = animal.name
+      }
+
+      if (animal.birthDate) {
+        detail.birthDate = animal.birthDate
+      }
+
+      if (animal.currentWeight !== undefined) {
+        detail.currentWeight = animal.currentWeight
+      }
+
+      if (animal.origin) {
+        detail.origin = animal.origin
+      }
+
+      if (animal.notes) {
+        detail.notes = animal.notes
+      }
+
+      if (animal.lotId) {
+        const lot = lotsById.get(animal.lotId)
+        if (lot) {
+          detail.lotName = lot.name
+        }
+      }
+
+      if (areasById) {
+        if (animal.landAreaId) {
+          const area = areasById.get(animal.landAreaId)
+          detail.landArea = area
+            ? {
+                code: area.code,
+                name: area.name,
+                type: area.type,
+                areaHectares: area.areaHectares,
+                status: area.status,
+              }
+            : null
+        } else {
+          detail.landArea = null
+        }
+      }
+
+      return detail
+    })
+
+  const prioritizedDetails =
+    prioritizeByKeys(
+      details,
+      question,
+      animal => [
+        animal.identification,
+        animal.name ?? '',
+        animal.species,
+        animal.breed,
+        animal.category,
+        animal.lotName ?? '',
+        animal.landArea?.code ?? '',
+        animal.landArea?.name ?? '',
+      ],
+    )
+
   return {
     total: animals.length,
     active: animals.filter(
@@ -355,6 +457,8 @@ function buildAnimalsContext(
     ).length,
     bySpecies,
     byStatus,
+    animalDetails:
+      makeList(prioritizedDetails),
   }
 }
 
@@ -1025,74 +1129,132 @@ function buildLandContext(
   }
 }
 
-function buildCropsContext():
-  IntelligenceContextCrops {
+function buildCropsContext(
+  user: User,
+  question: string,
+): IntelligenceContextCrops {
   const cycles = getCropCycles()
   const today = todayDateString()
-
-  const sevenDays =
-    addDaysToCivilDate(
-      today,
-      7,
-    )
+  const sevenDays = addDaysToCivilDate(today, 7)
+  const canSeeLandDetails = userHasPermission(user, 'land')
+  const areasById = canSeeLandDetails
+    ? new Map(getLandAreas().map(area => [area.id, area] as const))
+    : undefined
 
   const upcoming: string[] = []
   const overdue: string[] = []
 
-  for (const cycle of cycles) {
-    if (
-      cycle.status !== 'Planejado' &&
-      cycle.status !== 'Em andamento'
-    ) {
-      continue
-    }
+  const cycleDetails: IntelligenceContextCropCycle[] =
+    cycles.map(cycle => {
+      const detail: IntelligenceContextCropCycle = {
+        crop: cycle.crop,
+        season: cycle.season,
+        status: cycle.status,
+        managements: makeList(
+          getCropManagementsByCropCycleId(cycle.id).map(management => ({
+            date: management.date,
+            type: management.type,
+            description: management.description,
+            ...(management.productOrMaterial
+              ? { productOrMaterial: management.productOrMaterial }
+              : {}),
+            ...(management.doseOrQuantity
+              ? { doseOrQuantity: management.doseOrQuantity }
+              : {}),
+            ...(management.responsible
+              ? { responsible: management.responsible }
+              : {}),
+            ...(management.notes
+              ? { notes: management.notes }
+              : {}),
+          })),
+        ),
+        harvest: null,
+      }
 
-    if (
-      !cycle.expectedHarvestDate
-    ) {
-      continue
-    }
+      if (cycle.cultivar) {
+        detail.cultivar = cycle.cultivar
+      }
 
-    const label =
-      `${cycle.crop} (${cycle.season})`
+      if (cycle.plantingDate) {
+        detail.plantingDate = cycle.plantingDate
+      }
 
-    if (
-      cycle.expectedHarvestDate <
-      today
-    ) {
-      overdue.push(
-        `${label} — prevista ${cycle.expectedHarvestDate}`,
-      )
-    } else if (
-      cycle.expectedHarvestDate <=
-      sevenDays
-    ) {
-      upcoming.push(
-        `${label} — prevista ${cycle.expectedHarvestDate}`,
-      )
-    }
-  }
+      if (cycle.expectedHarvestDate) {
+        detail.expectedHarvestDate = cycle.expectedHarvestDate
+      }
+
+      if (cycle.notes) {
+        detail.notes = cycle.notes
+      }
+
+      if (areasById) {
+        const area = areasById.get(cycle.landAreaId)
+        detail.landArea = area
+          ? {
+              code: area.code,
+              name: area.name,
+              type: area.type,
+              areaHectares: area.areaHectares,
+              status: area.status,
+              ...(area.purpose ? { purpose: area.purpose } : {}),
+              ...(area.description ? { description: area.description } : {}),
+            }
+          : null
+      }
+
+      const harvest = getHarvestRecordByCropCycleId(cycle.id)
+      if (harvest) {
+        detail.harvest = {
+          harvestDate: harvest.harvestDate,
+          harvestedAreaHectares: harvest.harvestedAreaHectares,
+          productionQuantity: harvest.productionQuantity,
+          productionUnit: harvest.productionUnit,
+          ...(harvest.sackWeightKg !== undefined
+            ? { sackWeightKg: harvest.sackWeightKg }
+            : {}),
+          ...(harvest.notes ? { notes: harvest.notes } : {}),
+        }
+      }
+
+      if (
+        cycle.expectedHarvestDate &&
+        (cycle.status === 'Planejado' || cycle.status === 'Em andamento')
+      ) {
+        const label = `${cycle.crop} (${cycle.season})`
+        if (cycle.expectedHarvestDate < today) {
+          overdue.push(`${label} — prevista ${cycle.expectedHarvestDate}`)
+        } else if (cycle.expectedHarvestDate <= sevenDays) {
+          upcoming.push(`${label} — prevista ${cycle.expectedHarvestDate}`)
+        }
+      }
+
+      return detail
+    })
+
+  const prioritizedCycles = prioritizeByKeys(
+    cycleDetails,
+    question,
+    cycle => [
+      cycle.crop,
+      cycle.cultivar ?? '',
+      cycle.season,
+      cycle.landArea?.code ?? '',
+      cycle.landArea?.name ?? '',
+    ],
+  )
 
   return {
-    activeCycles:
-      cycles.filter(
-        cycle =>
-          cycle.status ===
-          'Em andamento',
-      ).length,
-    plannedCycles:
-      cycles.filter(
-        cycle =>
-          cycle.status ===
-          'Planejado',
-      ).length,
-    upcomingHarvests:
-      makeList(upcoming),
-    overdueHarvests:
-      makeList(overdue),
+    totalCycles: cycles.length,
+    activeCycles: cycles.filter(cycle => cycle.status === 'Em andamento').length,
+    plannedCycles: cycles.filter(cycle => cycle.status === 'Planejado').length,
+    completedCycles: cycles.filter(cycle => cycle.status === 'Concluído').length,
+    cancelledCycles: cycles.filter(cycle => cycle.status === 'Cancelado').length,
+    cycleDetails: makeList(prioritizedCycles),
+    upcomingHarvests: makeList(upcoming),
+    overdueHarvests: makeList(overdue),
   }
 }
-
 function buildMachinesContext(
   machines: Machine[],
   question: string,
@@ -1476,7 +1638,9 @@ export function buildIntelligenceContext(
   if (wantsAnimals) {
     context.animals =
       buildAnimalsContext(
+        user,
         animals,
+        question,
       )
   }
 
@@ -1500,7 +1664,10 @@ export function buildIntelligenceContext(
     wants('crops')
   ) {
     context.crops =
-      buildCropsContext()
+      buildCropsContext(
+        user,
+        question,
+      )
   }
 
   if (

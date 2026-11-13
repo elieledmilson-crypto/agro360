@@ -15,6 +15,7 @@ module.exports = {
   ignorePatterns: [
     'dist',
     '.eslintrc.cjs',
+    'supabase/functions',
   ],
 
   parser: '@typescript-eslint/parser',

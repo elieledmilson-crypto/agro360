@@ -14,6 +14,7 @@ import {
   BarChart3,
   Map as MapIcon,
   BrainCircuit,
+  Settings,
 } from 'lucide-react'
 import { PermissionKey, User } from '../../types'
 import { useAuth } from '../../hooks/useAuth'
@@ -101,6 +102,11 @@ const navItems: NavItem[] = [
     label: 'Funcionários',
     icon: Users,
     adminOnly: true,
+  },
+  {
+    to: '/perfil',
+    label: 'Meu perfil',
+    icon: Settings,
   },
   {
     to: '/propriedade',

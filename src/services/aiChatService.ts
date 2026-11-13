@@ -1,3 +1,5 @@
+import { supabase } from '../lib/supabase'
+
 import {
   AgendaActivityPriority,
   AgendaActivityStatus,
@@ -1177,6 +1179,17 @@ export async function sendIntelligenceChat(
     )
   }
 
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession()
+
+  const accessToken = session?.access_token
+
+  if (sessionError || !accessToken) {
+    throw new Error('UNAUTHENTICATED')
+  }
+
   const controller =
     new AbortController()
 
@@ -1196,6 +1209,7 @@ export async function sendIntelligenceChat(
           headers: {
             'Content-Type':
               'application/json',
+            Authorization: `Bearer ${accessToken}`,
           },
           body:
             JSON.stringify(
