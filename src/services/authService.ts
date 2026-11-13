@@ -124,10 +124,16 @@ export async function register(
     throw new Error('A senha deve ter pelo menos 8 caracteres.')
   }
 
+  const emailRedirectTo = new URL(
+    '/login?email-confirmed=success',
+    window.location.origin,
+  ).toString()
+
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password,
     options: {
+      emailRedirectTo,
       data: {
         name: normalizedName,
       },

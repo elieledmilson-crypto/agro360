@@ -33,12 +33,19 @@ export default function Login() {
   const [passwordConfirmation, setPasswordConfirmation] =
     useState('')
   const [error, setError] = useState('')
-  const [message, setMessage] = useState(() =>
-    new URLSearchParams(location.search).get('password-reset') ===
-    'success'
-      ? 'Senha redefinida com sucesso. Entre com sua nova senha.'
-      : '',
-  )
+  const [message, setMessage] = useState(() => {
+    const searchParams = new URLSearchParams(location.search)
+
+    if (searchParams.get('password-reset') === 'success') {
+      return 'Senha redefinida com sucesso. Entre com sua nova senha.'
+    }
+
+    if (searchParams.get('email-confirmed') === 'success') {
+      return 'E-mail confirmado com sucesso! Agora você já pode entrar no Agro360.'
+    }
+
+    return ''
+  })
   const [loading, setLoading] = useState(false)
 
   const { login, register } = useAuth()
