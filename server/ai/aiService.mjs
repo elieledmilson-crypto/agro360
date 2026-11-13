@@ -431,8 +431,6 @@ export async function generateAnswer(
         }
 
         break
-      } finally {
-        clearTimeout(timeout)
       }
 
       if (!response.ok) {
@@ -443,6 +441,8 @@ export async function generateAnswer(
             await response.text()
         } catch {
           details = ''
+        } finally {
+          clearTimeout(timeout)
         }
 
         console.error(
@@ -483,11 +483,14 @@ export async function generateAnswer(
         data =
           await response.json()
       } catch {
+        clearTimeout(timeout)
         lastError =
           'AI_PROVIDER_ERROR: resposta inválida do Gemini.'
 
         continue
       }
+
+      clearTimeout(timeout)
 
       const raw =
         extractGeminiText(data)
