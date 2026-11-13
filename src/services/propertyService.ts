@@ -155,3 +155,57 @@ export async function updateProperty(
 
   return mapProperty(data)
 }
+
+export async function deletePropertyPermanently(
+  propertyId: string,
+  propertyName: string,
+  password: string,
+): Promise<void> {
+  const {
+    data: { user: currentUser },
+    error: currentUserError,
+  } = await supabase.auth.getUser()
+
+  if (currentUserError || !currentUser?.email) {
+    throw new Error('Sua sessão expirou. Entre novamente para continuar.')
+  }
+
+  const { data: reauthenticated, error: reauthenticationError } =
+    await supabase.auth.signInWithPassword({
+      email: currentUser.email,
+      password,
+    })
+
+  if (
+    reauthenticationError ||
+    reauthenticated.user?.id !== currentUser.id
+  ) {
+    throw new Error('Senha incorreta. A exclusão não foi realizada.')
+  }
+
+  const { error: deletionError } = await supabase.functions.invoke(
+    'delete-farm-completely',
+    {
+      body: { propertyId, propertyName },
+    },
+  )
+
+  if (deletionError) {
+    const context = (deletionError as { context?: Response }).context
+    if (context && typeof context.json === 'function') {
+      let payload: { error?: string } | null = null
+      try {
+        payload = await context.json() as { error?: string }
+      } catch {
+        payload = null
+      }
+      if (payload?.error) throw new Error(payload.error)
+    }
+    throw new Error(deletionError.message || 'Não foi possível excluir a fazenda.')
+  }
+
+  const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' })
+  if (signOutError) {
+    throw new Error('A exclusão foi concluída, mas não foi possível limpar a sessão local. Feche e abra o Agro360 novamente.')
+  }
+}
