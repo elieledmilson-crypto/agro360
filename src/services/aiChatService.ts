@@ -50,7 +50,7 @@ export type AIChatResponse =
         IntelligenceActionProposal
     }
 
-const TIMEOUT_MS = 45000
+const TIMEOUT_MS = 35000
 
 function isPlainObject(
   value: unknown,

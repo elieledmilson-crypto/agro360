@@ -137,6 +137,7 @@ export default async function handler(req, res) {
   }
 
   let authenticated = false
+  const authStartedAt = Date.now()
 
   try {
     authenticated = await verifySupabaseSession(req)
@@ -152,9 +153,16 @@ export default async function handler(req, res) {
     return sendJson(res, 503, { error: 'AUTH_PROVIDER_ERROR' })
   }
 
+  const authDurationMs = Date.now() - authStartedAt
+
   if (!authenticated) {
+    console.info(`[ai-api] unauthenticated authMs=${authDurationMs}`)
     return sendJson(res, 401, { error: 'UNAUTHENTICATED' })
   }
+
+  const contextBytes = Buffer.byteLength(JSON.stringify(validation.data.context), 'utf8')
+  const historyBytes = Buffer.byteLength(JSON.stringify(validation.data.history), 'utf8')
+  console.info(`[ai-api] request authMs=${authDurationMs} contextBytes=${contextBytes} historyBytes=${historyBytes} historyItems=${validation.data.history.length}`)
 
   try {
     const result = await generateAnswer(
