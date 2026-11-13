@@ -354,162 +354,101 @@ export async function generateAnswer(
       attempt += 1
     ) {
       const attemptStartedAt = Date.now()
-      console.info(`[ai-server] attempt-start model=${currentModel} attempt=${attempt}`)
-      const controller =
-        new AbortController()
+      const timeoutMs = attempt === 1 ? REQUEST_TIMEOUT_MS : RETRY_TIMEOUT_MS
+      const controller = new AbortController()
+      let phase = 'fetch'
+      let timedOut = false
 
-      const timeout =
-        setTimeout(
-          () => {
-            controller.abort()
-          },
-          attempt === 1 ? REQUEST_TIMEOUT_MS : RETRY_TIMEOUT_MS,
-        )
+      console.info(`[ai-server] attempt-start model=${currentModel} attempt=${attempt} timeoutMs=${timeoutMs}`)
+
+      const timeout = setTimeout(() => {
+        timedOut = true
+        console.warn(`[ai-server] attempt-timeout model=${currentModel} attempt=${attempt} phase=${phase} elapsedMs=${Date.now() - attemptStartedAt}`)
+        controller.abort()
+      }, timeoutMs)
 
       const url =
         `https://generativelanguage.googleapis.com/v1beta/models/` +
         `${encodeURIComponent(currentModel)}:generateContent` +
         `?key=${encodeURIComponent(apiKey)}`
 
-      let response
-
       try {
-        response = await fetch(
-          url,
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-
-            signal:
-              controller.signal,
-
-            body:
-              requestBody,
+        const fetchStartedAt = Date.now()
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        )
-      } catch (error) {
-        clearTimeout(timeout)
+          signal: controller.signal,
+          body: requestBody,
+        })
 
-        if (
-          isTimeoutError(error)
-        ) {
-          lastError =
-            'AI_TIMEOUT'
+        const headersDurationMs = Date.now() - fetchStartedAt
+        console.info(`[ai-server] response-headers model=${currentModel} attempt=${attempt} status=${response.status} durationMs=${headersDurationMs} totalMs=${Date.now() - attemptStartedAt}`)
 
-          if (attempt < 2) {
-            await new Promise(
-              resolve =>
-                setTimeout(
-                  resolve,
-                  attempt * 700,
-                ),
-            )
+        phase = 'response-body'
 
-            continue
+        if (!response.ok) {
+          const bodyStartedAt = Date.now()
+          let details = ''
+
+          try {
+            details = await response.text()
+          } catch (error) {
+            console.warn(`[ai-server] error-body-read model=${currentModel} attempt=${attempt} errorName=${error?.name ?? 'unknown'} durationMs=${Date.now() - bodyStartedAt}`)
           }
 
+          console.error(`[ai-server] provider-http-error model=${currentModel} attempt=${attempt} status=${response.status} bodyReadMs=${Date.now() - bodyStartedAt}`)
+
+          lastError = `AI_PROVIDER_ERROR: Gemini respondeu HTTP ${response.status}.`
+
+          const retryable =
+            response.status === 429 ||
+            response.status === 500 ||
+            response.status === 502 ||
+            response.status === 503 ||
+            response.status === 504
+
+          if (!retryable || attempt >= 2) {
+            break
+          }
+
+          continue
+        }
+
+        const bodyStartedAt = Date.now()
+        const data = await response.json()
+        console.info(`[ai-server] response-body-complete model=${currentModel} attempt=${attempt} durationMs=${Date.now() - bodyStartedAt} totalMs=${Date.now() - attemptStartedAt}`)
+
+        const raw = extractGeminiText(data)
+
+        if (!raw) {
+          console.error(`[ai-server] empty-response model=${currentModel} attempt=${attempt}`)
+          lastError = 'AI_PROVIDER_ERROR: resposta vazia do provedor.'
+          continue
+        }
+
+        console.info(`[ai-server] attempt-success model=${currentModel} attempt=${attempt} totalMs=${Date.now() - attemptStartedAt} requestTotalMs=${Date.now() - requestStartedAt}`)
+        return normalizeResponse(raw)
+      } catch (error) {
+        const durationMs = Date.now() - attemptStartedAt
+        const errorName = error instanceof Error ? error.name : 'unknown'
+        const timedOutError = timedOut || isTimeoutError(error)
+
+        console.error(`[ai-server] attempt-failed model=${currentModel} attempt=${attempt} phase=${phase} durationMs=${durationMs} timeout=${timedOutError} errorName=${errorName}`)
+
+        lastError = timedOutError
+          ? 'AI_TIMEOUT'
+          : 'AI_PROVIDER_ERROR'
+
+        if (attempt >= 2) {
           break
         }
-
-        lastError =
-          'AI_PROVIDER_ERROR'
-
-        if (attempt < 2) {
-          await new Promise(
-            resolve =>
-              setTimeout(
-                resolve,
-                attempt * 700,
-              ),
-          )
-
-          continue
-        }
-
-        break
-      }
-
-      if (!response.ok) {
-        let details = ''
-
-        try {
-          details =
-            await response.text()
-        } catch {
-          details = ''
-        } finally {
-          clearTimeout(timeout)
-        }
-
-        console.error(
-          `[ai-server] Gemini HTTP ${response.status} model=${currentModel} attempt=${attempt} ${details.slice(0, 300)}`,
-        )
-
-        lastError =
-          `AI_PROVIDER_ERROR: Gemini respondeu HTTP ${response.status}.`
-
-        const retryable =
-          response.status === 429 ||
-          response.status === 500 ||
-          response.status === 502 ||
-          response.status === 503 ||
-          response.status === 504
-
-        if (
-          retryable &&
-          attempt < 2
-        ) {
-          await new Promise(
-            resolve =>
-              setTimeout(
-                resolve,
-                attempt * 700,
-              ),
-          )
-
-          continue
-        }
-
-        break
-      }
-
-      let data
-
-      try {
-        data =
-          await response.json()
-      } catch {
+      } finally {
         clearTimeout(timeout)
-        lastError =
-          'AI_PROVIDER_ERROR: resposta inválida do Gemini.'
-
-        continue
       }
 
-      clearTimeout(timeout)
-
-      const raw =
-        extractGeminiText(data)
-
-      if (!raw) {
-        console.error(
-          `[ai-server] Gemini empty response model=${currentModel} attempt=${attempt} ${JSON.stringify(data).slice(0, 500)}`,
-        )
-
-        lastError =
-          'AI_PROVIDER_ERROR: resposta vazia do provedor.'
-
-        continue
-      }
-
-      console.info(`[ai-server] attempt-success model=${currentModel} attempt=${attempt} durationMs=${Date.now() - attemptStartedAt} totalMs=${Date.now() - requestStartedAt}`)
-      return normalizeResponse(
-        raw,
-      )
+      await new Promise(resolve => setTimeout(resolve, attempt * 700))
     }
   }
 
